@@ -3673,26 +3673,41 @@ function importSelectionText(text) {
   function delCookie(name) {
     try { document.cookie = name + "=; max-age=0; path=/"; } catch (e) {}
   }
+  function browserNewTabUrl() {
+    // 各浏览器「新建标签页」内建地址，用于关闭失败时的干净回退
+    try {
+      var ua = (navigator && navigator.userAgent) || "";
+      if (/Edg\//i.test(ua)) return "edge://newtab";
+      if (/Chrome\//i.test(ua) || /Chromium/i.test(ua)) return "chrome://newtab";
+      if (/Firefox\//i.test(ua)) return "about:newtab";
+    } catch (e) {}
+    return "";
+  }
   function exitApp() {
     // 服务模式：请求服务端退出进程
     try {
       if (/^https?:/i.test(location.protocol)) fetch("/api/bye", { keepalive: true });
     } catch (e) {}
-    // 退出即关闭标签页：直接 close()，不创建窗口、不跳转 about:blank（不留空白页）
-    // 各浏览器表现：关闭成功 -> Edge 回到新建标签页 / 其它浏览器返回上一页或新建标签页（干净退出）；
-    // 关闭被拦截 -> 保留本页并显示退出提示（无空白页、无残留标签）
+    // 退出即关闭标签页：直接 close()，不创建窗口、不跳转 about:blank
     try { window.close(); } catch (e) {}
     try { if (window.top) window.top.close(); } catch (e) {}
-    // 部分浏览器延迟处理 close()：稍后再补一次关闭尝试
+    // 部分浏览器延迟处理 close()：稍后再补一次关闭；仍未被关闭则回退到「新建标签页」
     setTimeout(function () {
-      try { if (!document.hidden) { window.close(); if (window.top) window.top.close(); } } catch (e) {}
+      try {
+        if (document.hidden) return; // 已关闭/隐藏，无需处理
+        try { window.close(); if (window.top) window.top.close(); } catch (e) {}
+        var nt = browserNewTabUrl();
+        if (nt && typeof location !== "undefined" && location.replace) location.replace(nt);
+      } catch (e) {}
     }, 150);
-    // 若被拦截（普通标签页无脚本打开记录）：保留本页并显示退出提示，绝不遗留空白页
+    // 兜底提示（极少数无法回退新建标签页的环境才可见，如 file:// 旧内核）
     var ov = document.getElementById("agreeModal");
     if (ov) {
-      ov.innerHTML = '<div class="modal" style="max-width:440px;align-items:center;">'
-        + '<div class="modal-body" style="text-align:center;padding:34px 22px;font-size:14px;color:#334155;">'
-        + "已按用户协议退出。<br><br>如需重新使用，请重新打开本程序（同意协议后继续）。</div></div>";
+      ov.innerHTML = '<div class="modal" style="max-width:460px;align-items:center;">'
+        + '<div class="modal-body" style="text-align:center;padding:34px 24px;font-size:14px;line-height:1.9;color:#334155;">'
+        + "已按用户协议退出。<br><br>"
+        + "正在返回浏览器「新建标签页」……若未跳转，请手动关闭本标签页。<br><br>"
+        + "如需重新使用，请重新打开本程序（同意协议后继续）。</div></div>";
       ov.style.display = "flex";
     }
   }
