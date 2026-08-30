@@ -409,6 +409,22 @@
   </div>
 </div>
 
+<!-- 移动端提示（建议使用 PC 操作） -->
+<div id="mobileMask" class="modal-overlay center" style="display:none;z-index:700;">
+  <div class="modal" style="max-width:400px;text-align:center;align-items:center;">
+    <div class="modal-head" style="justify-content:center;border-bottom:none;padding-bottom:0;">📱 请使用电脑操作</div>
+    <div class="modal-body" style="text-align:center;padding:16px 22px;font-size:14px;line-height:1.9;">
+      本系统为 <b>桌面端（PC）</b> 设计：课程库筛选联动、周课表按周查看、空课时段设置等
+      功能在手机屏幕上不便使用。<br><br>
+      建议使用电脑浏览器访问操作。
+    </div>
+    <div class="modal-foot">
+      <button id="mobileOk" class="btn-import" style="background:#2563eb;border-color:#2563eb;color:#fff;">知道了</button>
+      <button id="mobileForce" class="btn-import" style="background:#fff;color:#334155;">仍要使用</button>
+    </div>
+  </div>
+</div>
+
 <!-- 时段选课面板 -->
 <div id="ttModal" class="modal-overlay" style="display:none">
   <div class="modal">
@@ -3662,17 +3678,10 @@ function importSelectionText(text) {
     try {
       if (/^https?:/i.test(location.protocol)) fetch("/api/bye", { keepalive: true });
     } catch (e) {}
-    // 尝试真正关闭浏览器标签页：
-    //   open("", "_self") 让当前窗口变成“脚本打开的窗口”，此时 close() 多数浏览器放行
-    try {
-      var w = window.open("", "_self");
-      if (w) w.close();
-    } catch (e) {}
+    // 退出即关闭标签页：直接 close()，不创建窗口、不跳转 about:blank（不留空白页）
     try { window.close(); } catch (e) {}
     try { if (window.top) window.top.close(); } catch (e) {}
-    // 兜底1：先把页面清空（about:blank 视同已退出程序）
-    try { if (typeof location !== "undefined" && location.replace) location.replace("about:blank"); } catch (e) {}
-    // 兜底2：全屏说明（若上述均被浏览器拦截，仍保持对页面镜像提示）
+    // 若被浏览器拦截（普通标签页无脚本打开记录）：保留本页并显示退出提示，绝不遗留空白页
     var ov = document.getElementById("agreeModal");
     if (ov) {
       ov.innerHTML = '<div class="modal" style="max-width:440px;align-items:center;">'
@@ -3680,6 +3689,20 @@ function importSelectionText(text) {
         + "已按用户协议退出。<br><br>如需重新使用，请重新打开本程序（同意协议后继续）。</div></div>";
       ov.style.display = "flex";
     }
+  }
+function initMobilePrompt() {
+    // 移动端提示：窄屏（≤760px）弹窗建议使用 PC 操作；可关闭继续使用
+    try {
+      var w = window.innerWidth || (document.documentElement && document.documentElement.clientWidth) || 0;
+      if (!w || w > 760) return; // 桌面/无宽度环境不弹
+      var m = document.getElementById("mobileMask");
+      if (!m) return;
+      m.style.display = "flex";
+      var force = document.getElementById("mobileForce");
+      if (force) force.addEventListener("click", function () { m.style.display = "none"; });
+      var ok = document.getElementById("mobileOk");
+      if (ok) ok.addEventListener("click", function () { m.style.display = "none"; exitApp(); });
+    } catch (e) {}
   }
   function initAgreement() {
     var agreed = false;
@@ -3710,6 +3733,7 @@ function importSelectionText(text) {
 
     function init() {
     initAgreement();
+    initMobilePrompt();
     bindTtTabs(document.getElementById("timetable"));
     initCombos();
     syncDiscByProfile();
@@ -3769,6 +3793,7 @@ function importSelectionText(text) {
       getCookie: getCookie,
       setCookie: setCookie,
       initAgreement: initAgreement,
+      initMobilePrompt: initMobilePrompt,
       exitApp: exitApp,
       confirmRemove: confirmRemove,
       resolveConfirm: function (v) { if (cfResolver) cfResolver(v); },
