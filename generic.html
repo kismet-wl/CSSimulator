@@ -42,6 +42,18 @@
   @media (max-width: 1100px){
     .sim-layout { grid-template-columns: 1fr; grid-template-areas: "lib" "tt" "sel" "rules"; }
   }
+  /* 移动端顶栏：学生类别等画像行纵向适配 */
+  @media (max-width: 760px){
+    header#topbar { flex-direction: column; align-items: stretch; gap: 8px; }
+    header#topbar h1 { font-size: 15px; margin: 0; }
+    header#topbar .sub { font-size: 11px; }
+    header#topbar .profile { margin-left: 0; flex-wrap: wrap; gap: 8px 6px; width: 100%; }
+    header#topbar .profile label { flex: 1 1 46%; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 11px; }
+    header#topbar .profile label#incOtherLabel { flex: 1 1 100%; max-width: 100%; display: flex; flex-direction: row; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; }
+    header#topbar .profile select { width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 6px; }
+    header#topbar .actions { width: 100%; margin-left: 0; justify-content: flex-end; }
+    header#topbar .actions button { font-size: 12px; padding: 6px 10px; }
+  }
   .slot-filters { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 12px; color: var(--muted); }
   .slot-filters .fday, .slot-filters .fper { display: inline-flex; gap: 3px; align-items: center; }
   .slot-filters button { border: 1px solid var(--line); background: #fff; color: #334155; border-radius: 5px; min-width: 22px; padding: 1px 5px; cursor: pointer; font-size: 12px; }
@@ -72,7 +84,7 @@
   .combo-opt.sel { background: #dbeafe; font-weight: 600; }
   .lib-filters label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
   .lib-list { max-height: 72vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
-  .lib-count { font-size: 12px; color: var(--muted); }
+  .lib-count { font-size: 12px; color: var(--muted); position: sticky; top: 0; z-index: 2; background: var(--card); padding: 2px 4px 8px; box-shadow: 0 2px 4px rgba(0,0,0,.03); }
   .course-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; gap: 10px; justify-content: space-between; background:#fff; }
   .course-card.added { background: #eef4ff; border-color: #93c5fd; }
   .cc-name { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -165,7 +177,7 @@
   .btn-code:hover { color: var(--primary); border-color: var(--primary); }
   .sel-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .sel-main { flex: 1; min-width: 0; }
-  .sel-name { font-size: 13px; font-weight: 600; }
+  .sel-name { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; } font-size: 13px; font-weight: 600; }
   .sel-sub { font-size: 11px; color: var(--muted); }
   .deg-toggle { font-size: 12px; display: flex; align-items: center; gap: 3px; color: var(--muted); }
   .deg-toggle.locked { opacity: .5; cursor: not-allowed; }
@@ -314,7 +326,7 @@
         <option value="免修免考">免修免考</option>
       </select>
     </label>
-    <label style="white-space:nowrap;" title="勾选：所有核心课/专业课（含其他一级学科，如 0857/0713）标记为学位课的学分都计入「专业学位课学分」；取消勾选：仅计本一级学科学位课学分（规则校验同步变化）"><input type="checkbox" id="includeOtherDiscDegree" checked> 其他一级学科专业学位课纳入学分</label>
+    <label id="incOtherLabel" style="white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;" title="勾选：所有核心课/专业课（含其他一级学科，如 0857/0713）标记为学位课的学分都计入「专业学位课学分」；取消勾选：仅计本一级学科学位课学分（规则校验同步变化）"><input type="checkbox" id="includeOtherDiscDegree" checked> 非一级学科专业学位课纳入学分</label>
   </div>
   <div class="chips" id="chips"></div>
   <div class="actions">
@@ -434,18 +446,17 @@
   </div>
 </div>
 
-<!-- 移动端提示（建议使用 PC 操作） -->
-<div id="mobileMask" class="modal-overlay center" style="display:none;z-index:700;">
-  <div class="modal" style="max-width:400px;text-align:center;align-items:center;">
-    <div class="modal-head" style="justify-content:center;border-bottom:none;padding-bottom:0;">📱 请使用电脑操作</div>
-    <div class="modal-body" style="text-align:center;padding:16px 22px;font-size:14px;line-height:1.9;">
-      本系统为 <b>桌面端（PC）</b> 设计：课程库筛选联动、周课表按周查看、空课时段设置等
-      功能在手机屏幕上不便使用。<br><br>
-      建议使用电脑浏览器访问操作。
-    </div>
-    <div class="modal-foot">
-      <button id="mobileOk" class="btn-import" style="background:#2563eb;border-color:#2563eb;color:#fff;">知道了</button>
-      <button id="mobileForce" class="btn-import" style="background:#fff;color:#334155;">仍要使用</button>
+<!-- 移动端提示（顶部水平居中的提示条，建议使用 PC 操作） -->
+<div id="mobileMask" style="display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:700;max-width:92vw;width:520px;">
+  <div class="card" style="box-shadow:0 10px 34px rgba(0,0,0,.18);">
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;padding:10px 16px;">
+      <div style="font-size:13px;line-height:1.7;color:#334155;flex:1 1 240px;min-width:200px;">
+        📱 本系统为 <b>桌面端（PC）</b> 设计，手机屏幕使用不便，<b>建议使用电脑浏览器访问</b>。
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button id="mobileOk" class="btn-import" style="background:#2563eb;border-color:#2563eb;color:#fff;padding:5px 12px;">知道了</button>
+        <button id="mobileForce" class="btn-import" style="background:#fff;color:#334155;padding:5px 12px;">仍要使用</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3719,6 +3730,7 @@ var COURSE_LINKS = (typeof window !== "undefined" && window.COURSE_LINKS) || {};
     selected: [],            // [{course, degree}]
     filters: { q: "", dept: "", attr: "", level: "", disc: [], campus: "", sem: "", exam: [], days: [], periods: [], hideSel: false, merge: true, homeOnly: true },
     includeOtherDiscDegree: true,
+    semLabels: {},
     tab: "sim",
     ttSem: "2026秋",          // 周课表当前学期
     ttWeek: "",              // 周次视图：""=全部周次 / "1".."20"
@@ -3802,7 +3814,8 @@ var SEL_KEY = "course_sim_selected_v1";
       localStorage.setItem(PROFILE_KEY, JSON.stringify({
         satisfactions: state.satisfactions || {},
         campus: state.campus || "",
-        includeOtherDiscDegree: state.includeOtherDiscDegree
+        includeOtherDiscDegree: state.includeOtherDiscDegree,
+        semLabels: state.semLabels || {}
       }));
     } catch (e) {}
   }
@@ -3859,6 +3872,7 @@ var SEL_KEY = "course_sim_selected_v1";
         state.satisfactions = o.satisfactions || {};
         state.campus = o.campus || "";
         state.includeOtherDiscDegree = o.includeOtherDiscDegree !== false;
+        state.semLabels = o.semLabels || {};
       }
     } catch (e) {}
   }
@@ -3910,6 +3924,7 @@ var SEL_KEY = "course_sim_selected_v1";
   }
 
   function semLabel(key) {
+    if (state && state.semLabels && state.semLabels[key]) return state.semLabels[key]; // 用户自定义学期名
     var m = CORE.SEM_META.filter(function (s) { return s.key === key; })[0];
     return m ? m.label : (key || "");
   }
@@ -4083,6 +4098,44 @@ var SEL_KEY = "course_sim_selected_v1";
   }
   function slotDayOkArr(c, days) { return slotDayOk(null, days) || (c.slots || []).some(function (sl) { return slotDayOk(sl, days); }); }
   function slotPeriodOkArr(c, periods) { return slotPeriodOk(null, periods) || (c.slots || []).some(function (sl) { return slotPeriodOk(sl, periods); }); }
+  function levDist(a, b) {
+    if (a === b) return 0;
+    var m = a.length, n = b.length;
+    if (!m) return n; if (!n) return m;
+    var prev = [], cur = [];
+    for (var j = 0; j <= n; j++) prev[j] = j;
+    for (var i = 1; i <= m; i++) {
+      cur[0] = i;
+      for (var j = 1; j <= n; j++) {
+        var cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      }
+      for (var j = 0; j <= n; j++) prev[j] = cur[j];
+    }
+    return prev[n];
+  }
+  function fuzzyQScore(q, c) {
+    // 模糊匹配分：0=精确 1=前缀 2=包含 3=多词AND 4=前缀容错 5=窗口容错(编辑距离≤1) 9=不匹配
+    var hay = (((c.name || "") + " " + (c.en || "") + " " + (c.code || "") + " " + (c.teacher || "") + " " + (c.prof || "") + " " + (c.dept || "")).toLowerCase());
+    q = String(q || "").toLowerCase().trim();
+    if (!q) return 0;
+    if (hay === q) return 0;
+    if (hay.indexOf(q) === 0) return 1;
+    if (hay.indexOf(q) >= 0) return 2;
+    var terms = q.split(/[\s,，、/]+/).filter(Boolean);
+    if (terms.length > 1 && terms.every(function (t) { return hay.indexOf(t) >= 0; })) return 3;
+    if (q.length >= 3) {
+      if (levDist(hay.slice(0, q.length), q) <= 1) return 4;                 // 前缀容错（打错 1 个字）
+      var best = 99;
+      for (var i = 0; i + q.length <= hay.length; i++) {
+        var d = levDist(hay.slice(i, i + q.length), q);
+        if (d < best) best = d;
+        if (best === 0) break;
+      }
+      if (best <= 1) return 5;                                               // 正文窗口容错
+    }
+    return 9;
+  }
   function courseDiscCode7(c) {
     // 课程编码 第7~12位 = 一级学科代码（如 083000 / 085701）
     return String(c.code || "").slice(6, 12);
@@ -4093,9 +4146,10 @@ var SEL_KEY = "course_sim_selected_v1";
     var sel = selectedGids();
     var groups = {}; // gid -> {rep, instances, gnum}
     DATA.forEach(function (c) {
+      c._qs = 0;
       if (f.q) {
-        var hay = (c.name + (c.en || "") + (c.code || "") + (c.teacher || "") + (c.prof || "") + (c.dept || ""));
-        if (hay.indexOf(f.q) < 0) return;
+        c._qs = fuzzyQScore(f.q, c);
+        if (c._qs >= 9) return;
       }
       if (f.dept && c.dept !== f.dept) return;
       if (f.attr) {
@@ -4125,6 +4179,12 @@ var SEL_KEY = "course_sim_selected_v1";
     });
     var list = Object.keys(groups).map(function (gid) { return groups[gid]; });
     list.sort(function (a, b) {
+      if (f.q) {
+        // 模糊相关性优先（精确/前缀/包含/多词/容错），其次推荐，再拼音
+        if (a.rep._qs !== b.rep._qs) return a.rep._qs - b.rep._qs;
+        return (b.rep.reco ? 1 : 0) - (a.rep.reco ? 1 : 0)
+          || a.rep.name.localeCompare(b.rep.name, "zh");
+      }
       // 推荐课程优先
       var ra = a.rep.reco ? 0 : 1, rb = b.rep.reco ? 0 : 1;
       if (ra !== rb) return ra - rb;
@@ -4160,6 +4220,18 @@ var SEL_KEY = "course_sim_selected_v1";
     (function () {
       var wrap = document.getElementById("filterHomeOnlyWrap");
       if (wrap) wrap.style.display = PRO_ATTRS.indexOf(cur.attr) >= 0 ? "" : "none";
+    })();
+    // 导入下拉的学期名同步自定义标签
+    (function () {
+      try {
+        var imp = document.getElementById("importSem");
+        if (imp && imp.options && imp.options.length) {
+          for (var i = 0; i < imp.options.length; i++) {
+            var k = imp.options[i].value;
+            if (k) imp.options[i].text = "导入到：" + semLabel(k);
+          }
+        }
+      } catch (e) {}
     })();
     // 学期下拉（联动：仅列存在课程的学期，含各学期课程数）
     var semHtml = '<option value="">全部学期</option>';
@@ -4369,11 +4441,14 @@ function pickClass(gid, id) {
       html += '<div class="sel-row" data-id="' + c.id + '">'
         + '<span class="sel-dot" style="background:' + color + '"></span>'
         + '<div class="sel-main">'
-        + '<div class="sel-name" title="编码：' + esc(c.code || "-") + "｜教师：" + esc(c.teacher || c.prof || "-") + '">' + esc(c.name) + '</div>'
+        + '<div class="sel-name" title="编码：' + esc(c.code || "-") + "｜教师：" + esc(c.teacher || c.prof || "-") + '">' + esc(c.name)
+        + (COURSE_LINKS[c.code] ? '<a class="cc-link" href="' + esc(COURSE_LINKS[c.code]) + '" target="_blank" rel="noopener" title="在选课系统查看课程详情">🔗</a>' : '')
+        + '</div>'
         + '<div class="sel-sub">'
         + (c.semester ? '<span class="badge sem">' + semLabel(c.semester) + "</span> " : "")
         + '<span class="badge b-cat">' + CAT_LABEL[c.cat] + "</span> "
         + '<span class="badge credit">' + fmt(c.credit) + "学分</span> "
+        + (c.exam ? '<span class="badge b-exam">' + esc(c.exam) + "</span> " : "")
         + esc(c.time) + " · " + '<span class="badge b-dept">' + esc(c.dept) + "</span>"
         + (c.campus ? " · " + (CAMPUS_NAME[c.campus] || c.campus) : "")
         + (c.room ? " · " + esc(c.room) : "")
@@ -4580,7 +4655,7 @@ function showTtWeekMenu(box) {
     // 学期切换标签
     var tabs = '<div class="tt-tabs">';
     CORE.SEM_META.forEach(function (m) {
-      tabs += '<button class="tt-tab' + (m.key === state.ttSem ? " active" : "") + '" data-sem="' + m.key + '">' + esc(m.label) + "（" + m.count + "）</button>";
+      tabs += '<button class="tt-tab' + (m.key === state.ttSem ? " active" : "") + '" data-sem="' + m.key + '">' + esc(semLabel(m.key)) + "（" + m.count + "）</button>";
     });
     tabs += "</div>";
     // 当前学期的已选课程（可能为空，仍渲染表格骨架供点击选课）
@@ -5504,8 +5579,12 @@ function slotCandidatesAll(day, period, semester, selected, campus) {
       var on = combo.multi
         ? (o.val === "" ? state.filters[combo.multiField].length === 0 : state.filters[combo.multiField].indexOf(o.val) >= 0)
         : o.val === combo.sel.value;
-      return '<div class="combo-opt' + (on ? " sel" : "") + '" data-val="' + esc(o.val) + '">'
-        + (combo.multi ? (on ? "☑ " : "☐ ") : "") + esc(o.label) + "</div>";
+      // 学期项：仅被选中的行显示 ✎（点击进入就地编辑，菜单保持展开）
+      var isSemItem = combo.id === "filterSem" && o.val !== "";
+      var hint = isSemItem ? ' title="单击选择；被选中的学期名可用 ✎ 修改"' : "";
+      var pen = (isSemItem && on) ? ' <span class="sem-pen" style="color:#a5b4fc;cursor:pointer;">✎</span>' : "";
+      return '<div class="combo-opt' + (on ? " sel" : "") + '" data-val="' + esc(o.val) + '"' + hint + '>'
+        + (combo.multi ? (on ? "☑ " : "☐ ") : "") + esc(o.label) + pen + "</div>";
     }).join("");
     combo.menu.style.display = "block";
   }
@@ -5516,6 +5595,33 @@ function slotCandidatesAll(day, period, semester, selected, campus) {
     comboRender(combo);
   }
   // 打开下拉：始终显示全部选项（框内文字不参与过滤，无需删除即可看到全部）
+  var semEditing = false; // 就地编辑期间禁止 document 点击监听关闭菜单
+  function beginSemEdit(combo, key) {
+    // 双击下拉项 → 就地编辑学期名；失焦/回车保存，Esc 取消，点击空白处（失焦）即保存
+    try {
+      var cur = semLabel(key);
+      semEditing = true;
+      combo.menu.style.display = "block";
+      combo.menu.innerHTML = '<input id="semInline" value="' + esc(cur) + '" title="点击空白处保存 · Enter 保存 · Esc 取消" style="width:calc(100% - 12px);margin:4px 6px;padding:4px 6px;font-size:12px;border:1px solid #a5b4fc;border-radius:6px;box-sizing:border-box;outline:none;">';
+      var inp = combo.menu.querySelector && combo.menu.querySelector("#semInline");
+      if (!inp) { semEditing = false; return; }
+      setTimeout(function () { try { inp.focus(); inp.select(); } catch (e) {} }, 0);
+      var done = false;
+      function commit() {
+        if (done) return; done = true; semEditing = false;
+        var v = inp.value.trim();
+        if (v) state.semLabels[key] = v; else delete state.semLabels[key];
+        saveProfile();
+        refresh();
+      }
+      var cancel = function () { if (done) return; done = true; semEditing = false; try { combo.menu.style.display = "none"; } catch (e) {} };
+      inp.addEventListener("blur", function () { setTimeout(function () { commit(); }, 80); });
+      inp.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); commit(); }
+        else if (e.key === "Escape") { cancel(); }
+      });
+    } catch (e) { semEditing = false; }
+  }
   function comboOpen(combo) {
     comboCloseAll();
     if (!combo.opts || !combo.opts.length) combo.opts = comboOptionsFrom(combo.sel, combo.id);
@@ -5688,16 +5794,28 @@ function updateComboLabel(c) {
           else comboPick(combo, combo.visible[0].val);
         } else if (e.key === "Escape") { combo.menu.style.display = "none"; input.blur && input.blur(); }
       });
-      menu.addEventListener("mousedown", function (e) { if (e.preventDefault) e.preventDefault(); });
+      menu.addEventListener("mousedown", function (e) {
+        // 学期名编辑输入框：放行默认行为（点击取消全选、定位光标）；其余选项防止失焦闪烁
+        if (e.preventDefault && !(e.target && e.target.id === "semInline")) e.preventDefault();
+      });
       menu.addEventListener("click", function (e) {
-        var v = e.target && e.target.getAttribute && e.target.getAttribute("data-val");
+        var t = e.target;
+        var opt = t && t.closest ? t.closest(".combo-opt") : null;
+        var v = t && t.getAttribute ? t.getAttribute("data-val") : null;
+        if ((v === null || v === undefined) && opt) v = opt.getAttribute("data-val"); // ✎ span 无 data-val，取父级
         if (v !== null && v !== undefined) {
+          var isPen = t && t.classList && t.classList.contains("sem-pen");
+          if (combo.id === "filterSem" && v !== "" && isPen) {
+            beginSemEdit(combo, v); // 仅点 ✎ 进入就地编辑（菜单保持展开）
+            return;
+          }
           if (combo.multi) comboMultiToggle(combo, v); else comboPick(combo, v);
         }
       });
       } catch (err) { if (window.console) console.warn("combo 初始化失败(" + id + "):", err); }
     });
     document.addEventListener("click", function (e) {
+      if (semEditing) return; // 学期名就地编辑中：不因点击空白关闭菜单（失焦由 input blur 处理保存）
       var inside = e.target && e.target.closest && (e.target.closest(".combo") || e.target.closest(".ttw"));
       if (!inside) {
         comboCloseAll();
@@ -5969,6 +6087,16 @@ function isMobileDevice() {
       var m = document.getElementById("mobileMask");
       if (!m) return;
       m.style.display = "flex";
+      // 按屏幕实际像素精准水平居中（不用 vw/transform，避免移动端滚动条视口偏差）
+      try {
+        var w = m.offsetWidth || (m.getBoundingClientRect ? m.getBoundingClientRect().width : 0) || 0;
+        var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+        if (w > 0 && vw > 0) {
+          m.style.transform = "none";
+          m.style.left = Math.round(Math.max(8, (vw - w) / 2)) + "px";
+          if (m.className.indexOf("modal-overlay") >= 0) m.className = m.className.replace("modal-overlay", "").replace("center", "");
+        }
+      } catch (e) {}
       var force = document.getElementById("mobileForce");
       if (force) force.addEventListener("click", function () { m.style.display = "none"; });
       var ok = document.getElementById("mobileOk");
