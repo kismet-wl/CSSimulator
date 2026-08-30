@@ -33,10 +33,26 @@
   main { padding: 16px 20px 60px; max-width: 1500px; margin: 0 auto; }
   .tab-pane { display: none; }
   .tab-pane.active { display: block; }
-  .sim-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
-  @media (max-width: 1100px){ .sim-layout { grid-template-columns: 1fr; } }
+  .sim-layout { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "lib tt" "sel rules"; gap: 16px; align-items: start; }
+  .lib-zone { grid-area: lib; min-width: 0; display: flex; flex-direction: column; }
+  .lib-zone > .card + .card { margin-top: 20px; } /* 课程库 与 空课时段 之间留白（margin 直设，不依赖 flex gap） */
+  .tt-zone { grid-area: tt; min-width: 0; }
+  .sel-zone { grid-area: sel; min-width: 0; }
+  .rule-zone { grid-area: rules; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  @media (max-width: 1100px){
+    .sim-layout { grid-template-columns: 1fr; grid-template-areas: "lib" "tt" "sel" "rules"; }
+  }
+  .slot-filters { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 12px; color: var(--muted); }
+  .slot-filters .fday, .slot-filters .fper { display: inline-flex; gap: 3px; align-items: center; }
+  .slot-filters button { border: 1px solid var(--line); background: #fff; color: #334155; border-radius: 5px; min-width: 22px; padding: 1px 5px; cursor: pointer; font-size: 12px; }
+  .slot-filters button.on { background: #2563eb; border-color: #2563eb; color: #fff; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
   .card h3 { margin: 0 0 10px; font-size: 15px; }
+  .ck-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .ck-chip { display: inline-flex; align-items: baseline; gap: 4px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: #334155; background: #fff; }
+  .ck-chip b { font-weight: 700; }
+  .ck-chip.ok { border-color: #6ee7b7; background: #f0fdf4; color: #166534; }
+  .ck-chip.bad { border-color: #fcd34d; background: #fffbeb; color: #92400e; }
   .lib-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
   .import-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; margin-bottom: 10px; background: #eff6ff; border: 1px dashed #93c5fd; border-radius: 10px; }
   .import-title { font-weight: 700; font-size: 13px; color: #1d4ed8; }
@@ -96,6 +112,7 @@
   .tt-date { font-size: 10px; color: #94a3b8; font-weight: 400; display: block; }
   /* 空课时段设置（独立卡片，位于课程库下方，尺寸放宽） */
   .free-card { width: 100%; }
+  .free-corner button { padding: 4px 6px; font-size: 11px; }
   .tt-card-area { overflow-x: auto; }
   .free-bar { padding: 0; }
   .free-table-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -270,8 +287,9 @@
     </label>
     <label>一级学科
       <select id="discSel">
-          <option value="083000">环境科学与工程（083000）</option>
-          <option value="0857">资源与环境（0857 · 环境工程 085701）</option>
+          <option value="083000">环境科学与工程（0830xx）</option>
+          <option value="0857">资源与环境（0857xx）</option>
+          <option value="0713">生态学（0713xx）</option>
         </select>
     </label>
     <label>校区
@@ -295,6 +313,7 @@
         <option value="免修免考">免修免考</option>
       </select>
     </label>
+    <label style="white-space:nowrap;" title="勾选：所有核心课/专业课（含其他一级学科，如 0857/0713）标记为学位课的学分都计入「专业学位课学分」；取消勾选：仅计本一级学科学位课学分（规则校验同步变化）"><input type="checkbox" id="includeOtherDiscDegree" checked> 其他一级学科专业学位课纳入学分</label>
   </div>
   <div class="chips" id="chips"></div>
   <div class="actions">
@@ -312,8 +331,7 @@
 <main>
   <section id="tab-sim" class="tab-pane active">
     <div class="sim-layout">
-      <div class="left">
-      <div class="card">
+      <div class="lib-zone"><div class="card">
         <h3>课程库（2026 秋 2079 / 2027 春 0 · 待官方 / 2027 夏 0 · 待官方）</h3>
         <div class="import-bar">
           <span class="import-title">📥 导入 Excel 课表</span>
@@ -338,27 +356,33 @@
           <label title="勾选后从课程库隐藏已加入的课程（默认显示，已加入课程带「已加入 ✓」标记）"><input type="checkbox" id="filterHideSel"> 隐藏已选</label>
           <label id="filterHomeOnlyWrap" title="仅当「属性」选中专业类课程（核心课/专业课/研讨课/实验课/实践课/科学前沿讲座）时可用：按画像一级学科代码（083/0857）筛选"><input type="checkbox" id="filterHomeOnly" checked> 仅本一级学科</label>
         </div>
-        <div class="lib-list" id="libList"></div>
+        <span class="slot-filters">
+              <span class="fday">周次：<button class="day-chip" data-d="1">一</button><button class="day-chip" data-d="2">二</button><button class="day-chip" data-d="3">三</button><button class="day-chip" data-d="4">四</button><button class="day-chip" data-d="5">五</button><button class="day-chip" data-d="6">六</button><button class="day-chip" data-d="7">日</button></span>
+              <span class="fper">节次：<button class="per-chip" data-p="1">1</button><button class="per-chip" data-p="2">2</button><button class="per-chip" data-p="3">3</button><button class="per-chip" data-p="4">4</button><button class="per-chip" data-p="5">5</button><button class="per-chip" data-p="6">6</button><button class="per-chip" data-p="7">7</button><button class="per-chip" data-p="8">8</button><button class="per-chip" data-p="9">9</button><button class="per-chip" data-p="10">10</button><button class="per-chip" data-p="11">11</button><button class="per-chip" data-p="12">12</button><button class="per-chip" data-p="13">13</button></span>
+            </span>
+<div class="lib-list" id="libList"></div>
       </div>
-        <div class="card free-card">
+        <div class="card free-card" style="margin-top:20px" data-gap-marker="20px">
           <h3>🚫 安排个人空闲时段（○ 空闲 → 🚫 严格 → ≈ 宽松）</h3>
           <div id="freeBar"></div>
         </div>
       </div>
-      <div class="right">
-        <div class="card">
+      <div class="tt-zone">
+        <div class="card tt-card-area">
+          <h3>周课表（周一~周日 × 第 1-13 节）</h3>
+          <div id="timetable"></div>
+        </div>
+      </div>
+      <div class="sel-zone"><div class="card">
           <h3>我的选课单 <span id="selCount" style="color:var(--muted);font-size:13px"></span> <label class="sel-head-opt" title="开启后退课不再弹确认框"><input type="checkbox" id="noConfirm"> 退课免确认</label>
           <input type="file" id="fileImportSel" accept=".txt,text/plain" style="display:none"></h3>
           <div class="profileNoteWrap" id="profileNote"></div>
           <div id="selList"></div>
         </div>
-        <div class="card">
+      </div>
+      <div class="rule-zone"><div class="card">
           <h3>规则校验（按当前画像实时计算）</h3>
           <div id="checkList"></div>
-        </div>
-        <div class="card tt-card-area">
-          <h3>周课表（周一~周日 × 第 1-13 节）</h3>
-          <div id="timetable"></div>
         </div>
       </div>
     </div>
@@ -564,10 +588,12 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
       if (c.cat === "pubel") pubelCredit += cr;
       if (c.cat === "lecture") lectureCredit += cr;
       if (s.degree && (c.cat === "core" || c.cat === "pro")) {
-        // 专业学位课 = 核心课/专业课 且标记为学位课
-        degreeCredit += cr;
-        if (c.cat === "core") { coreDegree++; if (!isHomeDisc(c)) coreProOutside++; }
-        if (c.cat === "pro") { proDegree++; if (!isHomeDisc(c)) coreProOutside++; }
+        // 专业学位课 = 核心课/专业课 且标记为学位课；
+        // 是否纳入「其他一级学科」的学位课学分由 opts.includeOtherDiscDegree 控制（默认纳入）
+        var inHome = isHomeDisc(c);
+        if (inHome || opts.includeOtherDiscDegree !== false) degreeCredit += cr;
+        if (c.cat === "core") { coreDegree++; if (!inHome) coreProOutside++; }
+        if (c.cat === "pro") { proDegree++; if (!inHome) coreProOutside++; }
       }
     });
     // 免修免考 / 慕课学习：直接满足对应公共必修学分（未另选课时才计入）
@@ -582,6 +608,10 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
       satParts.push(type + "（" + method + "）");
     });
 
+    function degreeMarked(c, selList) {
+      for (var i = 0; i < selList.length; i++) { if (selList[i].course.id === c.id) return !!selList[i].degree; }
+      return false;
+    }
     function isHomeDisc(c) {
       var d = c.disc || "";
       return /环境/.test(d) || /资源与环境/.test(d) || /大气/.test(d);
@@ -690,7 +720,7 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
     // 硕士英语可用 英语A / 慕课学习 / 免修免考 任一满足；博士英语可用 英语B / 免修免考
     checks.push({
       level: missing.length === 0 ? "pass" : (missing.every(function (m) { return m === "博士英语" || m === "中国马克思主义与当代"; }) ? "warn" : "fail"),
-      title: "公共必修课齐全（" + prof.label + "）",
+      title: "公共必修课齐全（" + prof.label + "）（学分累计须满 " + fmt(prof.pubreqCredit) + "，暂未纳入判定）",
       detail: missing.length === 0
         ? "已选齐 " + prof.pubreqList.length + " 门公共必修" + (satParts.length ? "（" + satParts.join("；") + " 直接计入）" : "")
         : (missing.every(function (m) { return m === "博士英语" || m === "中国马克思主义与当代"; })
@@ -708,16 +738,51 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
     // 4 专业学位课学分
     checks.push({
       level: degreeCredit >= prof.degreeCredit ? "pass" : "fail",
-      title: "专业学位课学分 ≥" + prof.degreeCredit,
-      detail: "当前 " + fmt(degreeCredit) + " 学分（本一级学科 " + (prof.discLabel || "083000 环境科学与工程") + " 相关核心课+专业课按学位课计）"
+      title: "专业学位课学分 ≥" + prof.degreeCredit + "（本学年需满足）",
+      detail: "当前 " + fmt(degreeCredit) + " 学分（本一级学科 " + (prof.discLabel || "083000 环境科学与工程") + " 相关核心课+专业课按学位课计"
+        + (opts.includeOtherDiscDegree === false ? "；未勾选「纳入其他一级学科专业学位课」，仅计本一级学科" : "；已勾选「纳入其他一级学科专业学位课」") + "）"
     });
 
     // 5 公共选修
     checks.push({
       level: pubelCredit >= prof.electCredit ? "pass" : "fail",
-      title: "公共选修课 ≥" + prof.electCredit + " 学分",
+      title: "公共选修课 ≥" + prof.electCredit + " 学分（本学年需满足）",
       detail: "当前 " + fmt(pubelCredit) + " 学分"
     });
+
+    // 5b 中心培养方案（仅学术型 master/zhibo 显示；工程型培养方案另表，不适用）
+    if (profileType === "master" || profileType === "zhibo") {
+    // 课程学习总学分≥30；学位课=公共学位课7 + 专业学位课≥12；公共选修≥2；
+    // 专业选修课≥9（核心课2+普及课≥2+研讨课2+科学前沿讲座2）；必修环节≥6（开题2+中期2+学术报告与社会实践2）
+    var PLAN_PRO_ELEC_CATS = ["core", "pro", "seminar", "lecture"]; // 培养方案口径：核心/普及(专业课)/研讨/讲座
+    var planProElect = 0;
+    selectedCourses.forEach(function (c) {
+      if (PLAN_PRO_ELEC_CATS.indexOf(c.cat) >= 0 && !degreeMarked(c, selected)) planProElect += c.credit || 0;
+    });
+    var CENTRAL_PLAN = {
+      minTotal: 30, pubreq: 7, degree: 12, elect: 2, proElect: 9, phases: 6,
+      label: "中心培养方案（学术型硕士·生态环境研究中心）",
+      note: "课程学习总学分≥30；学位课=公共学位课7+专业≥12；公共选修≥2；专业选修(核心2+普及≥2+研讨2+讲座2)≥9；必修环节≥6（开题2+中期2+学术报告与社会实践2，另计）"
+    };
+    var centralOk = (totalCredit >= CENTRAL_PLAN.minTotal)
+      && (pubreqCredit >= CENTRAL_PLAN.pubreq)
+      && (degreeCredit >= CENTRAL_PLAN.degree)
+      && (pubelCredit >= CENTRAL_PLAN.elect)
+      && (planProElect >= CENTRAL_PLAN.proElect);
+    var ckChips = [
+      { label: "课程学习", val: fmt(totalCredit) + "/" + CENTRAL_PLAN.minTotal, ok: totalCredit >= CENTRAL_PLAN.minTotal },
+      { label: "公共学位课", val: fmt(pubreqCredit) + "/" + CENTRAL_PLAN.pubreq, ok: pubreqCredit >= CENTRAL_PLAN.pubreq },
+      { label: "专业学位课", val: fmt(degreeCredit) + "/" + CENTRAL_PLAN.degree, ok: degreeCredit >= CENTRAL_PLAN.degree },
+      { label: "公共选修", val: fmt(pubelCredit) + "/" + CENTRAL_PLAN.elect, ok: pubelCredit >= CENTRAL_PLAN.elect },
+      { label: "专业选修", val: fmt(planProElect) + "/" + CENTRAL_PLAN.proElect, ok: planProElect >= CENTRAL_PLAN.proElect }
+    ];
+    checks.push({
+      level: centralOk ? "pass" : "warn",
+      title: CENTRAL_PLAN.label,
+      detail: "必修环节 " + CENTRAL_PLAN.phases + " 学分（开题2+中期2+学术报告与社会实践2）需另行完成；按一学年课表评估，全程≥30",
+      chips: ckChips
+    });
+    }
 
     // 6 培养层次匹配
     var badLevels = selectedCourses.filter(function (c) {
@@ -1563,7 +1628,8 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
   var state = {
     profileType: "master",
     selected: [],            // [{course, degree}]
-    filters: { q: "", dept: "", attr: "", level: "", disc: [], campus: "", sem: "", exam: [], hideSel: false, merge: true, homeOnly: true },
+    filters: { q: "", dept: "", attr: "", level: "", disc: [], campus: "", sem: "", exam: [], days: [], periods: [], hideSel: false, merge: true, homeOnly: true },
+    includeOtherDiscDegree: true,
     tab: "sim",
     ttSem: "2026秋",          // 周课表当前学期
     ttWeek: "",              // 周次视图：""=全部周次 / "1".."20"
@@ -1646,7 +1712,8 @@ var SEL_KEY = "course_sim_selected_v1";
     try {
       localStorage.setItem(PROFILE_KEY, JSON.stringify({
         satisfactions: state.satisfactions || {},
-        campus: state.campus || ""
+        campus: state.campus || "",
+        includeOtherDiscDegree: state.includeOtherDiscDegree
       }));
     } catch (e) {}
   }
@@ -1702,6 +1769,7 @@ var SEL_KEY = "course_sim_selected_v1";
       if (o && typeof o === "object") {
         state.satisfactions = o.satisfactions || {};
         state.campus = o.campus || "";
+        state.includeOtherDiscDegree = o.includeOtherDiscDegree !== false;
       }
     } catch (e) {}
   }
@@ -1714,6 +1782,8 @@ var SEL_KEY = "course_sim_selected_v1";
       if (a) a.value = (state.satisfactions && state.satisfactions["硕士英语"]) || "";
       var b = document.getElementById("profEngB");
       if (b) b.value = (state.satisfactions && state.satisfactions["博士英语"]) || "";
+      var inc = document.getElementById("includeOtherDiscDegree");
+      if (inc) inc.checked = state.includeOtherDiscDegree !== false;
     } catch (e) {}
   }
 
@@ -1885,15 +1955,45 @@ var SEL_KEY = "course_sim_selected_v1";
   }
 
   function homeDiscPrefix() {
-    // 画像一级学科分类码（7~12位前四位）：学术=0830 环境科学与工程，工程=0857 资源与环境
+    // 画像一级学科分类码（编码7~12位前四位）：0830 环境科学与工程 / 0857 资源与环境 / 0713 生态学
+    var discSelV = "";
+    try { var sel = document.getElementById("discSel"); if (sel) discSelV = sel.value; } catch (e) {}
+    if (discSelV === "0857") return "0857";      // 资源与环境
+    if (discSelV === "0713") return "0713";      // 生态学
     var eng = (state.profileType || "").indexOf("eng") === 0;
-    try {
-      var sel = document.getElementById("discSel");
-      if (sel && sel.value === "0857") eng = true;
-      if (sel && sel.value === "083000") eng = false;
-    } catch (e) {}
-    return eng ? "0857" : "0830";
+    if (discSelV === "083000") eng = false;
+    return eng ? "0857" : "0830";                // 工程默认0857；学术默认0830 环境科学与工程
   }
+  var DAY_INDEX = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "日": 7 };
+  function dayIndexOfSlot(time) {
+    try {
+      var m = String(time || "").match(/^周([一二三四五六日])/);
+      return m ? (DAY_INDEX[m[1]] || 0) : 0;
+    } catch (e) { return 0; }
+  }
+  function periodRangeOf(time) {
+    try {
+      var m = String(time || "").match(/\((\d+)-(\d+)\)/);
+      if (!m) return null;
+      var a = parseInt(m[1], 10), b = parseInt(m[2], 10);
+      if (!a || !b || b < a) return null;
+      return [a, b];
+    } catch (e) { return null; }
+  }
+  function slotDayOk(sl, days) {
+    return !(Array.isArray(days) && days.length) || days.indexOf(dayIndexOfSlot(sl && sl.time)) >= 0;
+  }
+  function slotPeriodOk(sl, periods) {
+    if (!(Array.isArray(periods) && periods.length)) return true;
+    var r = periodRangeOf(sl && sl.time);
+    return !!r && periods.some(function (p) { return p >= r[0] && p <= r[1]; });
+  }
+  function instanceSlotFilterOk(c, f) {
+    // 周次/节次筛选对单个班次的判定（与课程级一致）
+    return slotDayOkArr(c, f && f.days) && slotPeriodOkArr(c, f && f.periods);
+  }
+  function slotDayOkArr(c, days) { return slotDayOk(null, days) || (c.slots || []).some(function (sl) { return slotDayOk(sl, days); }); }
+  function slotPeriodOkArr(c, periods) { return slotPeriodOk(null, periods) || (c.slots || []).some(function (sl) { return slotPeriodOk(sl, periods); }); }
   function courseDiscCode7(c) {
     // 课程编码 第7~12位 = 一级学科代码（如 083000 / 085701）
     return String(c.code || "").slice(6, 12);
@@ -1928,6 +2028,8 @@ var SEL_KEY = "course_sim_selected_v1";
         var dcCode = courseDiscCode7(c);
         if (!dcCode || dcCode.indexOf(homeDiscPrefix()) !== 0) return;
       }
+      // 周次/节次筛选：所选星期/节次任一时段命中即算
+      if (!instanceSlotFilterOk(c, f)) return;
       if (f.hideSel && sel[c.gid]) return;
       if (!groups[c.gid]) groups[c.gid] = { rep: c, instances: [], gnum: c.gnum };
       groups[c.gid].instances.push(c);
@@ -2026,16 +2128,22 @@ var SEL_KEY = "course_sim_selected_v1";
         + '<div class="cc-time">' + esc(timeStr) + (c.campus ? " · " + (CAMPUS_NAME[c.campus] || c.campus) : "") + (c.room ? " · " + esc(c.room) : "")
         + (c.quota ? " · 限选" + c.quota + "人" : "") + '</div>'
         + (g.gnum > 1
-            ? '<select class="class-sel" data-gid="' + esc(c.gid) + '">' + g.instances.map(function (inst, i) {
-                // 各班信息统一格式：班N：节次(开课周) · 校区(缺失占位) · 教室 · 教师
-                var ctime = uniqueSlotStrs([inst]);
-                var camp = inst.campus ? (CAMPUS_NAME[inst.campus] || inst.campus) : "校区未标注";
-                // 已选班次带 selected，重渲染后下拉保持显示选中项（不再弹回第一项）
-                var selOn = state.classPick[c.gid] === inst.id ? " selected" : "";
-                return '<option value="' + inst.id + '"' + selOn + '>班' + (i + 1) + "：" + esc(ctime) + " · " + esc(camp)
-                  + (inst.room ? " · " + esc(inst.room) : "")
-                  + (inst.teacher || inst.prof ? " · 教师：" + esc(inst.teacher || inst.prof) : "") + "</option>";
-              }).join("") + '</select>'
+            ? (function () {
+                // 班次下拉与周次/节次筛选联动：仅列出匹配当前筛选的班次
+                var insts = g.instances.filter(function (inst) { return instanceSlotFilterOk(inst, state.filters); });
+                if (!insts.length) {
+                  return '<select class="class-sel" data-gid="' + esc(c.gid) + '" disabled>'
+                    + '<option>无匹配班次（请调整周次/节次筛选）</option></select>';
+                }
+                return '<select class="class-sel" data-gid="' + esc(c.gid) + '">' + insts.map(function (inst, i) {
+                  var ctime = uniqueSlotStrs([inst]);
+                  var camp = inst.campus ? (CAMPUS_NAME[inst.campus] || inst.campus) : "校区未标注";
+                  var selOn = state.classPick[c.gid] === inst.id ? " selected" : "";
+                  return '<option value="' + inst.id + '"' + selOn + '>班' + (i + 1) + "：" + esc(ctime) + " · " + esc(camp)
+                    + (inst.room ? " · " + esc(inst.room) : "")
+                    + (inst.teacher || inst.prof ? " · 教师：" + esc(inst.teacher || inst.prof) : "") + "</option>";
+                }).join("") + '</select>';
+              })()
             : "")
         + "</div>"
         + '<div class="cc-right"><button class="btn-add" data-gid="' + esc(c.gid) + '">' + (added ? "已加入 ✓" : "＋ 加入") + "</button></div>"
@@ -2231,7 +2339,7 @@ function pickClass(gid, id) {
 
   /* ---------------- 渲染：规则校验 ---------------- */
   function renderChecks() {
-    var res = CORE.checkRules(state.selected, state.profileType, { freePeriods: freeBlocksForRules(), satisfactions: state.satisfactions || {} });
+    var res = CORE.checkRules(state.selected, state.profileType, { freePeriods: freeBlocksForRules(), satisfactions: state.satisfactions || {}, includeOtherDiscDegree: state.includeOtherDiscDegree });
     var chips = document.getElementById("chips");
     // 专业选修总学分 = 专业类属性课程（核心/学科核心/专业核心/专业课/研讨/实验/实践/讲座，
     // 含非本一级学科）中未标学位课的学分合计
@@ -2255,8 +2363,17 @@ function pickClass(gid, id) {
     var html = "";
     res.checks.forEach(function (ch) {
       var icon = ch.level === "pass" ? "✅" : (ch.level === "warn" ? "⚠️" : "❌");
+      var body = "";
+      if (ch.chips && ch.chips.length) {
+        body = '<div class="ck-chips">' + ch.chips.map(function (c2) {
+          return '<span class="ck-chip' + (c2.ok ? " ok" : " bad") + '">' + esc(c2.label) + " <b>" + esc(c2.val) + "</b></span>";
+        }).join("") + "</div>";
+        if (ch.detail) body += '<div class="check-detail">' + esc(ch.detail) + "</div>";
+      } else {
+        body = '<div class="check-detail">' + esc(ch.detail) + "</div>";
+      }
       html += '<div class="check-row ' + ch.level + '"><div class="check-icon">' + icon + '</div>'
-        + '<div><div class="check-title">' + esc(ch.title) + '</div><div class="check-detail">' + esc(ch.detail) + '</div></div></div>';
+        + '<div><div class="check-title">' + esc(ch.title) + '</div>' + body + '</div></div>';
     });
     box.innerHTML = html;
     // 学生画像提示
@@ -3061,13 +3178,12 @@ function slotCandidatesAll(day, period, semester, selected, campus) {
     if (!bar) return;
     var html = '<div class="free-table-head">'
       + '<div class="free-title">安排个人空闲时段：点击循环「○ 空闲 → 🚫 严格(整学期空课) → ≈ 宽松(仅允许指定周次可上课)」；变灰时段不可选课</div>'
-      + '<button type="button" class="free-chip" data-act="free-reset" title="清空全部空课时段设置">↺ 清空</button>'
       + '</div><div class="free-table">';
     // 标题行：左侧「空课时段」+ 周一~周日
     html += '<div class="free-cell free-head free-lblhead">空课时段</div>';
     WEEKDAYS.forEach(function (d) { html += '<div class="free-cell free-head free-dayhead">' + d + "</div>"; });
     // 内容行：左上角空 + 每列（上午/下午/晚上）
-    html += '<div class="free-cell free-corner"></div>';
+    html += '<div class="free-cell free-corner"><button type="button" class="free-chip" data-act="free-reset" title="清空全部空课时段设置">↺ 清空</button></div>';
     WEEKDAYS.forEach(function (d, i) {
       var day = i + 1;
       html += '<div class="free-cell free-cols">';
@@ -3148,6 +3264,9 @@ function slotCandidatesAll(day, period, semester, selected, campus) {
 
   /* ---------------- 事件绑定 ---------------- */
   function bindGlobal() {
+    document.getElementById("discSel").addEventListener("change", function () {
+      refresh(); // 一级学科切换：课程库「仅本一级学科」/联动选项即时更新
+    });
     document.getElementById("profileType").addEventListener("change", function (e) {
       state.profileType = e.target.value;
       syncDiscByProfile();
@@ -3174,11 +3293,36 @@ function slotCandidatesAll(day, period, semester, selected, campus) {
         if (state.tab === "reco") renderRecommend();
       });
     });
+    document.getElementById("includeOtherDiscDegree").addEventListener("change", function (e) {
+      state.includeOtherDiscDegree = e.target.checked;
+      renderChecks(); // 规则校验联动
+      refresh();      // chips 专业学位课学分联动 + 持久化
+    });
     ["filterDept", "filterLevel", "filterAttr", "filterDisc", "filterCampus", "filterSem", "filterExam"].forEach(function (id) {
       document.getElementById(id).addEventListener("change", function (e) {
         var map = { filterDept: "dept", filterLevel: "level", filterAttr: "attr", filterDisc: "disc", filterCampus: "campus", filterSem: "sem", filterExam: "exam" };
         state.filters[map[id]] = e.target.value;
         renderFilters(); // 联动刷新选项
+        renderLibrary();
+      });
+    });
+    document.querySelectorAll(".day-chip").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var d = parseInt(b.getAttribute("data-d"), 10);
+        var arr = state.filters.days || [];
+        arr = arr.indexOf(d) >= 0 ? arr.filter(function (x) { return x !== d; }) : arr.concat([d]);
+        state.filters.days = arr;
+        b.classList.toggle("on", arr.indexOf(d) >= 0);
+        renderLibrary();
+      });
+    });
+    document.querySelectorAll(".per-chip").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var pnum = parseInt(b.getAttribute("data-p"), 10);
+        var arr = state.filters.periods || [];
+        arr = arr.indexOf(pnum) >= 0 ? arr.filter(function (x) { return x !== pnum; }) : arr.concat([pnum]);
+        state.filters.periods = arr;
+        b.classList.toggle("on", arr.indexOf(pnum) >= 0);
         renderLibrary();
       });
     });
@@ -3510,10 +3654,7 @@ function updateComboLabel(c) {
         btn.textContent = "退出应用";
         btn.title = "关闭本服务进程";
         btn.style.cssText = "background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.4);";
-        btn.onclick = function () {
-          try { fetch("/api/bye", { keepalive: true }); } catch (e) {}
-          setTimeout(function () { try { window.close(); } catch (e) {} }, 250);
-        };
+        btn.onclick = exitApp; // 复用完整退出流程（请求退出 + 关标签 + 关不掉切整屏退出态），静态托管页同样有反馈
         actions.appendChild(btn);
       }
     } catch (e) {}
@@ -3673,49 +3814,67 @@ function importSelectionText(text) {
   function delCookie(name) {
     try { document.cookie = name + "=; max-age=0; path=/"; } catch (e) {}
   }
-  function browserNewTabUrl() {
-    // 各浏览器「新建标签页」内建地址，用于关闭失败时的干净回退
-    try {
-      var ua = (navigator && navigator.userAgent) || "";
-      if (/Edg\//i.test(ua)) return "edge://newtab";
-      if (/Chrome\//i.test(ua) || /Chromium/i.test(ua)) return "chrome://newtab";
-      if (/Firefox\//i.test(ua)) return "about:newtab";
-    } catch (e) {}
-    return "";
-  }
   function exitApp() {
     // 服务模式：请求服务端退出进程
     try {
       if (/^https?:/i.test(location.protocol)) fetch("/api/bye", { keepalive: true });
     } catch (e) {}
-    // 退出即关闭标签页：直接 close()，不创建窗口、不跳转 about:blank
+    // 注：浏览器禁止网页跳转 edge://newtab / chrome://newtab 等内部地址（Not allowed to load local resource），
+    // 故采用「自开窗口技巧 + close」多路尝试关闭；关不掉则切整屏退出态（无报错、无空白页亲手关闭即可）
+    // 1) 自开窗口技巧：把当前窗口标记为“脚本打开”，随后 close() 多数浏览器放行（不新建标签）
+    try { var w0 = window.open("", "_self"); if (w0) w0.close(); } catch (e) {}
+    // 2) 直接关闭
     try { window.close(); } catch (e) {}
     try { if (window.top) window.top.close(); } catch (e) {}
-    // 部分浏览器延迟处理 close()：稍后再补一次关闭；仍未被关闭则回退到「新建标签页」
+    // 3) 延迟补关（部分浏览器延迟处理 close()）
     setTimeout(function () {
       try {
-        if (document.hidden) return; // 已关闭/隐藏，无需处理
+        if (typeof document !== "undefined" && document.hidden) return; // 已关闭/隐藏
+        try { var w1 = window.open("", "_self"); if (w1) w1.close(); } catch (e) {}
         try { window.close(); if (window.top) window.top.close(); } catch (e) {}
-        var nt = browserNewTabUrl();
-        if (nt && typeof location !== "undefined" && location.replace) location.replace(nt);
       } catch (e) {}
-    }, 150);
-    // 兜底提示（极少数无法回退新建标签页的环境才可见，如 file:// 旧内核）
-    var ov = document.getElementById("agreeModal");
-    if (ov) {
-      ov.innerHTML = '<div class="modal" style="max-width:460px;align-items:center;">'
-        + '<div class="modal-body" style="text-align:center;padding:34px 24px;font-size:14px;line-height:1.9;color:#334155;">'
-        + "已按用户协议退出。<br><br>"
-        + "正在返回浏览器「新建标签页」……若未跳转，请手动关闭本标签页。<br><br>"
-        + "如需重新使用，请重新打开本程序（同意协议后继续）。</div></div>";
-      ov.style.display = "flex";
-    }
+      // 4) 仍未被关闭：切换为整屏退出态（代替空白页；无需跳内部地址）
+      try {
+        document.title = "已退出 · 请关闭本标签页";
+        var body = document.body || (document.documentElement && document.documentElement);
+        if (body) {
+          body.innerHTML = '<div style="height:100vh;box-sizing:border-box;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;background:#0f172a;color:#cbd5e1;text-align:center;font:15px/1.9 sans-serif;padding:24px;">'
+            + '<div style="width:100%;font-size:19px;font-weight:600;color:#f8fafc;">已按用户协议退出</div>'
+            + '<div style="width:100%;margin-top:8px;">请手动关闭本标签页</div>'
+            + '<div style="width:100%;font-size:12px;color:#64748b;margin-top:12px;">浏览器安全限制：脚本无法自动关闭普通标签/跳转内部页；<br>由链接打开的页面可自动关闭并回到「新建标签页」。</div>'
+            + '</div>';
+        }
+      } catch (e) {}
+    }, 180);
   }
-function initMobilePrompt() {
-    // 移动端提示：窄屏（≤760px）弹窗建议使用 PC 操作；可关闭继续使用
+function isMobileDevice() {
+    // 精确移动端检测：UA 关键字优先 + 触屏能力 + pointer/hover 媒体查询 + 宽度的组合判定
     try {
+      var ua = (navigator && navigator.userAgent) || "";
+      // 1) UA 关键字（手机/平板 OS 最可靠）
+      var uaMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)
+        || (/Mobile/i.test(ua) && /Safari/i.test(ua));
+      // 2) 触屏能力
+      var touch = ((navigator && navigator.maxTouchPoints) || 0) > 1
+        || (typeof window !== "undefined" && "ontouchstart" in window);
+      // 3) 媒体查询：coarse 指针且无 hover（移动端典型特征），排除触屏笔记本
+      var coarse = false, noHover = false;
+      if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+        try { coarse = window.matchMedia("(pointer: coarse)").matches; } catch (e) {}
+        try { noHover = !window.matchMedia("(hover: hover)").matches; } catch (e) {}
+      }
+      // 4) 宽度（平板横屏等凭触摸+粗指针+狭窄判定）
       var w = window.innerWidth || (document.documentElement && document.documentElement.clientWidth) || 0;
-      if (!w || w > 760) return; // 桌面/无宽度环境不弹
+      if (uaMobile) return true;                       // UA 明确 = 移动端（最高优先级）
+      if (touch && coarse && noHover && w > 0 && w <= 1024) return true; // 触屏平板/手机
+      if (touch && w > 0 && w <= 760) return true;     // 兜底：触屏且窄屏
+      return false;                                    // 其余（含触屏笔记本/桌面）一律桌面
+    } catch (e) { return false; }
+  }
+  function initMobilePrompt() {
+    // 移动端提示：精确判定移动设备后弹窗建议使用 PC 操作；可关闭继续使用
+    try {
+      if (!isMobileDevice()) return; // 桌面（含触屏笔记本）不弹
       var m = document.getElementById("mobileMask");
       if (!m) return;
       m.style.display = "flex";
@@ -3815,6 +3974,7 @@ function initMobilePrompt() {
       setCookie: setCookie,
       initAgreement: initAgreement,
       initMobilePrompt: initMobilePrompt,
+      isMobileDevice: isMobileDevice,
       exitApp: exitApp,
       confirmRemove: confirmRemove,
       resolveConfirm: function (v) { if (cfResolver) cfResolver(v); },
