@@ -3679,9 +3679,15 @@ function importSelectionText(text) {
       if (/^https?:/i.test(location.protocol)) fetch("/api/bye", { keepalive: true });
     } catch (e) {}
     // 退出即关闭标签页：直接 close()，不创建窗口、不跳转 about:blank（不留空白页）
+    // 各浏览器表现：关闭成功 -> Edge 回到新建标签页 / 其它浏览器返回上一页或新建标签页（干净退出）；
+    // 关闭被拦截 -> 保留本页并显示退出提示（无空白页、无残留标签）
     try { window.close(); } catch (e) {}
     try { if (window.top) window.top.close(); } catch (e) {}
-    // 若被浏览器拦截（普通标签页无脚本打开记录）：保留本页并显示退出提示，绝不遗留空白页
+    // 部分浏览器延迟处理 close()：稍后再补一次关闭尝试
+    setTimeout(function () {
+      try { if (!document.hidden) { window.close(); if (window.top) window.top.close(); } } catch (e) {}
+    }, 150);
+    // 若被拦截（普通标签页无脚本打开记录）：保留本页并显示退出提示，绝不遗留空白页
     var ov = document.getElementById("agreeModal");
     if (ov) {
       ov.innerHTML = '<div class="modal" style="max-width:440px;align-items:center;">'
