@@ -4094,7 +4094,11 @@ var SEL_KEY = "course_sim_selected_v1";
   }
   function instanceSlotFilterOk(c, f) {
     // 周次/节次筛选对单个班次的判定（与课程级一致）
-    return slotDayOkArr(c, f && f.days) && slotPeriodOkArr(c, f && f.periods);
+    if (!(slotDayOkArr(c, f && f.days) && slotPeriodOkArr(c, f && f.periods))) return false;
+    // 校区同步：筛选栏校区 + 画像栏校区（慕课豁免）
+    if (f && f.campus && c.campus && c.campus !== f.campus) return false;
+    if (state && state.campus && c.campus && c.campus !== state.campus && !(CORE && CORE.isMOOC && CORE.isMOOC(c))) return false;
+    return true;
   }
   function slotDayOkArr(c, days) { return slotDayOk(null, days) || (c.slots || []).some(function (sl) { return slotDayOk(sl, days); }); }
   function slotPeriodOkArr(c, periods) { return slotPeriodOk(null, periods) || (c.slots || []).some(function (sl) { return slotPeriodOk(sl, periods); }); }
@@ -4270,7 +4274,9 @@ var SEL_KEY = "course_sim_selected_v1";
       var catLabel = CAT_LABEL[c.cat] || c.attr;
       var color = CAT_COLOR[c.cat] || "#999";
       var recoBadge = (!NO_RECO && c.reco) ? '<span class="badge reco">' + recoLabel(c.reco) + "</span>" : "";
-      var classBadge = g.gnum > 1 ? '<span class="badge multi">' + g.gnum + "个班次</span>" : "";
+      var effInsts = g.instances.filter(function (inst) { return instanceSlotFilterOk(inst, state.filters); }); // 与班次下拉同口径（周次/节次/校区）
+      var classBadge = effInsts.length > 1 ? '<span class="badge multi">' + effInsts.length + "个班次</span>"
+        : (g.gnum > 1 && effInsts.length === 1 ? '<span class="badge multi">1个班次</span>' : "");
       var semBadge = c.semester ? '<span class="badge sem">' + esc(semLabel(c.semester)) + "</span>" : "";
       var timeStr = uniqueSlotStrs(g.instances);
       var fullInfo = "编码：" + (c.code || "-") + " ｜ 学分：" + fmt(c.credit) + " ｜ 英文：" + (c.en || "-") + " ｜ 节次：" + uniqueTimes(g.instances) + " ｜ 授课方式：" + (c.teach || "-") + " ｜ 考试方式：" + (c.exam || "-") + " ｜ 首席教授：" + (c.prof || "-") + " ｜ 主讲教师：" + (c.teacher || "-") + " ｜ 限选/已选：" + (c.quota || "-") + "/" + (c.taken || 0);
@@ -4292,8 +4298,7 @@ var SEL_KEY = "course_sim_selected_v1";
         + (c.quota ? " · 限选" + c.quota + "人" : "") + '</div>'
         + (g.gnum > 1
             ? (function () {
-                // 班次下拉与周次/节次筛选联动：仅列出匹配当前筛选的班次
-                var insts = g.instances.filter(function (inst) { return instanceSlotFilterOk(inst, state.filters); });
+                var insts = effInsts; // 与徽章同一份过滤结果（周次/节次/校区同步）
                 if (!insts.length) {
                   return '<select class="class-sel" data-gid="' + esc(c.gid) + '" disabled>'
                     + '<option>无匹配班次（请调整周次/节次筛选）</option></select>';
