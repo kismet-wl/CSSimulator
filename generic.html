@@ -287,7 +287,7 @@
 <header id="topbar">
   <div class="brand">
     <h1>🎓 研究生模拟选课系统</h1>
-    <div class="sub">中国科学院大学 · 2026 秋季学期 · 通用模拟器 · v0.0.2rc7</div>
+    <div class="sub">中国科学院大学 · 2026 秋季学期 · 通用模拟器 · v0.0.2rc8</div>
   </div>
   <div class="profile">
     <label>学生类别
@@ -585,6 +585,7 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
     var selectedCourses = selected.map(function (s) { return s.course; });
     var totalCredit = 0, pubreqCredit = 0, degreeCredit = 0, pubelCredit = 0;
     var coreDegree = 0, proDegree = 0, coreProOutside = 0;
+    var degreeCoreCredit = 0, degreeProCredit = 0, engEthicsCredit = 0;
     var lectureCredit = 0;
     var pubreqFound = {};
 
@@ -603,10 +604,16 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
         // 专业学位课 = 核心课/专业课 且标记为学位课；
         // 是否纳入「其他一级学科」的学位课学分由 opts.includeOtherDiscDegree 控制（默认纳入）
         var inHome = isHomeDisc(c);
-        if (inHome || opts.includeOtherDiscDegree !== false) degreeCredit += cr;
+        var crEff = (inHome && c.hours) ? cr : cr; // 学分照计（含非本一级时按开关）
+        if (inHome || opts.includeOtherDiscDegree !== false) {
+          degreeCredit += cr;
+          if (c.cat === "core") degreeCoreCredit += cr;
+          if (c.cat === "pro") degreeProCredit += cr;
+        }
         if (c.cat === "core") { coreDegree++; if (!inHome) coreProOutside++; }
         if (c.cat === "pro") { proDegree++; if (!inHome) coreProOutside++; }
       }
+      if (/工程伦理/.test(c.name || "")) engEthicsCredit += cr;
     });
     // 免修免考 / 慕课学习：直接满足对应公共必修学分（未另选课时才计入）
     var satisfactions = opts.satisfactions || {};
@@ -743,7 +750,7 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
     // 3 学位课：2核心+2专业课
     checks.push({
       level: (coreDegree >= 2 && proDegree >= 2) ? "pass" : "fail",
-      title: "学位课 ≥2门核心 + ≥2门专业课",
+      title: "学位课 ≥2门核心 + ≥2门专业课（本学年需满足）",
       detail: "当前核心课(学位) " + coreDegree + " 门、专业课(学位) " + proDegree + " 门"
     });
 
@@ -762,40 +769,60 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
       detail: "当前 " + fmt(pubelCredit) + " 学分"
     });
 
-    // 5b 中心培养方案（仅学术型 master/zhibo 显示；工程型培养方案另表，不适用）
-    if (profileType === "master" || profileType === "zhibo") {
-    // 课程学习总学分≥30；学位课=公共学位课7 + 专业学位课≥12；公共选修≥2；
-    // 专业选修课≥9（核心课2+普及课≥2+研讨课2+科学前沿讲座2）；必修环节≥6（开题2+中期2+学术报告与社会实践2）
-    var PLAN_PRO_ELEC_CATS = ["core", "pro", "seminar", "lecture"]; // 培养方案口径：核心/普及(专业课)/研讨/讲座
+    // 5b 中心培养方案（最新培养方案：学术 0713/0830 与 工程 0857；与一级学科、学生类别联动：0713/0830=学术型、0857=专业型，一级学科优先）
+    var isEngPlan = (profileType || "").indexOf("eng") === 0;
+    if (opts.discSel === "0857") isEngPlan = true;                                   // 0857 资源与环境 = 专业型
+    if (opts.discSel === "0713" || opts.discSel === "083000") isEngPlan = false;     // 0713/0830 = 学术型
+    var PLAN_ELECT_CATS = ["core", "pro", "seminar", "lab", "practice", "lecture"]; // 专业选修可选范围（非学位课）
     var planProElect = 0;
     selectedCourses.forEach(function (c) {
-      if (PLAN_PRO_ELEC_CATS.indexOf(c.cat) >= 0 && !degreeMarked(c, selected)) planProElect += c.credit || 0;
+      if (PLAN_ELECT_CATS.indexOf(c.cat) >= 0 && !degreeMarked(c, selected)) planProElect += c.credit || 0;
     });
-    var CENTRAL_PLAN = {
-      minTotal: 30, pubreq: 7, degree: 12, elect: 2, proElect: 9, phases: 6,
-      label: "中心培养方案（学术型硕士·生态环境研究中心）",
-      note: "课程学习总学分≥30；学位课=公共学位课7+专业≥12；公共选修≥2；专业选修(核心2+普及≥2+研讨2+讲座2)≥9；必修环节≥6（开题2+中期2+学术报告与社会实践2，另计）"
-    };
-    var centralOk = (totalCredit >= CENTRAL_PLAN.minTotal)
-      && (pubreqCredit >= CENTRAL_PLAN.pubreq)
-      && (degreeCredit >= CENTRAL_PLAN.degree)
-      && (pubelCredit >= CENTRAL_PLAN.elect)
-      && (planProElect >= CENTRAL_PLAN.proElect);
-    var ckChips = [
-      { label: "课程学习", val: fmt(totalCredit) + "/" + CENTRAL_PLAN.minTotal, ok: totalCredit >= CENTRAL_PLAN.minTotal },
-      { label: "公共学位课", val: fmt(pubreqCredit) + "/" + CENTRAL_PLAN.pubreq, ok: pubreqCredit >= CENTRAL_PLAN.pubreq },
-      { label: "专业学位课", val: fmt(degreeCredit) + "/" + CENTRAL_PLAN.degree, ok: degreeCredit >= CENTRAL_PLAN.degree },
-      { label: "公共选修", val: fmt(pubelCredit) + "/" + CENTRAL_PLAN.elect, ok: pubelCredit >= CENTRAL_PLAN.elect },
-      { label: "专业选修", val: fmt(planProElect) + "/" + CENTRAL_PLAN.proElect, ok: planProElect >= CENTRAL_PLAN.proElect }
-    ];
-    checks.push({
-      level: centralOk ? "pass" : "warn",
-      title: CENTRAL_PLAN.label,
-      detail: "必修环节 " + CENTRAL_PLAN.phases + " 学分（开题2+中期2+学术报告与社会实践2）需另行完成；按一学年课表评估，全程≥30",
-      chips: ckChips
-    });
+    if (isEngPlan) {
+      // 0857 资源与环境：课程学习≥24；学位课≥19（公共7+专业≥12）；公共必修非学位课(工程伦理)1；公选≥2；专业选修≥2；专业学位课内含核心课≥2门、专业课≥2门
+      var PLAN_E = { minTotal: 24, pubreq: 7, degree: 12, elect: 2, proElect: 2, ethics: 1, coreN: 2, proN: 2,
+        label: "中心培养方案（工程型硕士·0857 资源与环境）" };
+      var ckE = [
+        { label: "课程学习", val: fmt(totalCredit) + "/" + PLAN_E.minTotal, ok: totalCredit >= PLAN_E.minTotal },
+        { label: "公共学位课", val: fmt(pubreqCredit) + "/" + PLAN_E.pubreq, ok: pubreqCredit >= PLAN_E.pubreq },
+        { label: "专业学位课", val: fmt(degreeCredit) + "/" + PLAN_E.degree, ok: degreeCredit >= PLAN_E.degree },
+        { label: "核心课(学位)", val: coreDegree + "门 ≥" + PLAN_E.coreN, ok: coreDegree >= PLAN_E.coreN },
+        { label: "专业课(学位)", val: proDegree + "门 ≥" + PLAN_E.proN, ok: proDegree >= PLAN_E.proN },
+        { label: "工程伦理(公必非学位)", val: fmt(engEthicsCredit) + "/" + PLAN_E.ethics, ok: engEthicsCredit >= PLAN_E.ethics },
+        { label: "公共选修", val: fmt(pubelCredit) + "/" + PLAN_E.elect, ok: pubelCredit >= PLAN_E.elect },
+        { label: "专业选修", val: fmt(planProElect) + "/" + PLAN_E.proElect, ok: planProElect >= PLAN_E.proElect }
+      ];
+      var okE = ckE.every(function (x) { return x.ok; });
+      checks.push({
+        level: okE ? "pass" : "warn",
+        title: PLAN_E.label,
+        detail: "申请学位前课程学习≥24 学分；学位课≥19（公共学位课7+专业学位课≥12，其中核心课≥2门、专业课≥2门）；工程伦理(公共必修非学位)1 学分；公共选修≥2；专业选修≥2（核心/专业核心/专业课/研讨/实验/实践/前沿中选修）。",
+        chips: ckE
+      });
+    } else {
+      // 0713 生态学 / 0830 环境科学与工程：课程学习≥30；学位课=公共7+专业≥12（核心部≥4学分且≥2门；专业课部≥4学分且≥2门）；公选≥2；专业选修无学分下限（可选范围内自选）
+      // 标题随一级学科细化（一级学科恒有值，无未选情形）：0713→生态学；其余学术→0830环境科学与工程
+      var discT = opts.discSel === "0713" ? "0713生态学" : "0830环境科学与工程";
+      var PLAN_A = { minTotal: 30, pubreq: 7, degree: 12, coreC: 4, coreN: 2, proC: 4, proN: 2, elect: 2,
+        label: "中心培养方案（学术型硕士·" + discT + "）" };
+      var discName = (profileType === "zhibo" ? "直博" : "硕士");
+      var ckA = [
+        { label: "课程学习", val: fmt(totalCredit) + "/" + PLAN_A.minTotal, ok: totalCredit >= PLAN_A.minTotal },
+        { label: "公共学位课", val: fmt(pubreqCredit) + "/" + PLAN_A.pubreq, ok: pubreqCredit >= PLAN_A.pubreq },
+        { label: "专业学位课", val: fmt(degreeCredit) + "/" + PLAN_A.degree, ok: degreeCredit >= PLAN_A.degree },
+        { label: "核心课(学位)", val: coreDegree + "门/" + fmt(degreeCoreCredit) + "分 ≥" + PLAN_A.coreN + "门/" + PLAN_A.coreC + "分", ok: coreDegree >= PLAN_A.coreN && degreeCoreCredit >= PLAN_A.coreC },
+        { label: "专业课(学位)", val: proDegree + "门/" + fmt(degreeProCredit) + "分 ≥" + PLAN_A.proN + "门/" + PLAN_A.proC + "分", ok: proDegree >= PLAN_A.proN && degreeProCredit >= PLAN_A.proC },
+        { label: "公共选修", val: fmt(pubelCredit) + "/" + PLAN_A.elect, ok: pubelCredit >= PLAN_A.elect },
+        { label: "专业选修", val: fmt(planProElect) + " 学分（无下限）", ok: true }
+      ];
+      var okA = ckA.every(function (x) { return x.ok; });
+      checks.push({
+        level: okA ? "pass" : "warn",
+        title: PLAN_A.label,
+        detail: (profileType === "zhibo" ? "硕博连读/直博" : "硕士") + "申请学位前课程学习≥30 学分；学位课=公共学位课7+专业学位课≥12（学科核心/专业核心 ≥4学分且≥2门，专业 ≥4学分且≥2门）；公共选修≥2；专业选修可从学科核心课/专业核心课/专业课/研讨课/实验课/实践课/科学前沿讲座中选择（无学分下限）。",
+        chips: ckA
+      });
     }
-
     // 6 培养层次匹配
     var badLevels = selectedCourses.filter(function (c) {
       var pr = recognizePubreq(c);
@@ -4454,7 +4481,7 @@ function pickClass(gid, id) {
         + '<span class="badge b-cat">' + CAT_LABEL[c.cat] + "</span> "
         + '<span class="badge credit">' + fmt(c.credit) + "学分</span> "
         + (c.exam ? '<span class="badge b-exam">' + esc(c.exam) + "</span> " : "")
-        + esc(c.time) + " · " + '<span class="badge b-dept">' + esc(c.dept) + "</span>"
+        + esc(uniqueSlotStrs([c])) + " · " + '<span class="badge b-dept">' + esc(c.dept) + "</span>"
         + (c.campus ? " · " + (CAMPUS_NAME[c.campus] || c.campus) : "")
         + (c.room ? " · " + esc(c.room) : "")
         + (c.teacher || c.prof ? " · 教师：" + esc(c.teacher || c.prof) : "") + '</div>'
@@ -4510,7 +4537,9 @@ function pickClass(gid, id) {
 
   /* ---------------- 渲染：规则校验 ---------------- */
   function renderChecks() {
-    var res = CORE.checkRules(state.selected, state.profileType, { freePeriods: freeBlocksForRules(), satisfactions: state.satisfactions || {}, includeOtherDiscDegree: state.includeOtherDiscDegree });
+    var dselV = "";
+    try { dselV = document.getElementById("discSel").value || ""; } catch (e) {}
+    var res = CORE.checkRules(state.selected, state.profileType, { freePeriods: freeBlocksForRules(), satisfactions: state.satisfactions || {}, includeOtherDiscDegree: state.includeOtherDiscDegree, discSel: dselV });
     var chips = document.getElementById("chips");
     // 专业选修总学分 = 专业类属性课程（核心/学科核心/专业核心/专业课/研讨/实验/实践/讲座，
     // 含非本一级学科）中未标学位课的学分合计
@@ -5436,7 +5465,8 @@ function slotCandidatesAll(day, period, semester, selected, campus) {
   /* ---------------- 事件绑定 ---------------- */
   function bindGlobal() {
     document.getElementById("discSel").addEventListener("change", function () {
-      refresh(); // 一级学科切换：课程库「仅本一级学科」/联动选项即时更新
+      syncProfileByDisc(); // 一级学科 ↔ 学生类别联动（0857→工程；0713/0830→学术）
+      refresh(); // 课程库「仅本一级学科」/联动选项/规则方案即时更新
     });
     document.getElementById("profileType").addEventListener("change", function (e) {
       state.profileType = e.target.value;
@@ -5831,15 +5861,42 @@ function updateComboLabel(c) {
     updateCombos();
   }
 
-  /* ---------------- 一级学科（学术型 083000 / 工程型 0857 资源与环境·环境工程） ---------------- */
+  /* ---------------- 一级学科 ↔ 学生类别双向联动 ---------------- */
+  // 学生类别 → 一级学科：工程→0857（仅专业型）；学术→0713/083000（仅学术型）
   function syncDiscByProfile() {
     var sel = document.getElementById("discSel");
     if (!sel) return;
     var isEng = state.profileType.indexOf("eng") === 0;
-    var target = isEng ? "0857" : "083000";
-    for (var i = 0; i < (sel.options || []).length; i++) {
-      if (sel.options[i].value === target) { sel.selectedIndex = i; sel.value = target; break; }
-    }
+    // 按学生类别重建一级学科选项：学术=083000/0713，工程=0857
+    var opts = isEng
+      ? [["0857", "资源与环境（0857xx）"]]
+      : [["083000", "环境科学与工程（0830xx）"], ["0713", "生态学（0713xx）"]];
+    var cur = sel.value || "";
+    var valid = false;
+    for (var i = 0; i < opts.length; i++) if (opts[i][0] === cur) valid = true;
+    sel.innerHTML = opts.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + "</option>"; }).join("");
+    sel.value = valid ? cur : opts[0][0];
+  }
+  function syncProfileByDisc() {
+    // 一级学科 → 学生类别：0857=专业型；0713/083000=学术型（硕↔工程硕、硕博↔工程硕博 维度保留）
+    try {
+      var sel = document.getElementById("discSel");
+      var pt = document.getElementById("profileType");
+      if (!sel || !pt) return;
+      var disc = sel.value || "";
+      var cur = pt.value || "master";
+      var isEng = cur.indexOf("eng") === 0;
+      var isDoc = cur.indexOf("zhibo") === 0;
+      var wantEng, wantDoc = isDoc;
+      if (disc === "0857") wantEng = true;
+      else if (disc === "0713" || disc === "083000") wantEng = false;
+      else return; // 未选择一级学科：不干预
+      var target = (wantEng ? "eng_" : "") + (wantDoc ? "zhibo" : "master");
+      if (pt.value !== target) {
+        pt.value = target;
+        state.profileType = target;
+      }
+    } catch (e) {}
   }
 
   /* ---------------- 关闭网页自动退出（服务模式） ----------------
