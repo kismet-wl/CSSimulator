@@ -281,13 +281,35 @@
   .rules-table th, .rules-table td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; }
   .rules-table th { background: #f8fafc; }
   footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px; border-top: 1px solid var(--line); background:#fff; }
+  .tt-cell.tt-bk .tt-name { opacity: .55; text-decoration: line-through; }
+  .tt-cell.tt-bk .tt-bktag { font-size: 10px; color: #64748b; border: 1px solid #94a3b8; border-radius: 4px; padding: 0 4px; margin-left: 2px; }
+  .tt-bkbtn { font-size: 10px; padding: 0 5px; border: 1px solid #a5b4fc; background: #eef2ff; color: #4338ca; border-radius: 5px; cursor: pointer; margin-right: 4px; }
+  .sel-row.sel-backup .sel-main { opacity: .55; text-decoration: line-through; }
+  .sel-row.sel-backup .sel-bktag { background: #f1f5f9; color: #64748b; }
+  .pick-bk { font-size: 11px; padding: 3px 8px; border: 1px solid #a5b4fc; background: #eef2ff; color: #4338ca; border-radius: 6px; cursor: pointer; margin-left: 6px; }
+  .pick-row.pick-backup .pick-info { opacity: .55; text-decoration: line-through; }
+  /* 选课面板按钮统一：形状/字号一致（＋加入、＋备选、✕退课） */
+  #pickList .btn-add-sm, #pickList .pick-bk, #pickList .btn-del {
+    font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line);
+    background: #fff; color: #334155; cursor: pointer; white-space: nowrap;
+    display: inline-block; text-align: center; line-height: 1.5;
+  }
+  #pickList .btn-add-sm:hover, #pickList .pick-bk:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+  #pickList .btn-del:hover { background: var(--bad); color: #fff; border-color: var(--bad); }
+  /* 面板行内按钮竖直对齐：信息区弹性撑开，按钮统一右列 */
+  #pickList .pick-row { display: flex; align-items: center; gap: 8px; padding: 9px 4px; }
+  #pickList .pick-info { flex: 1 1 auto; min-width: 0; }
+  #pickList .pick-row > button { flex: 0 0 auto; min-width: 66px; text-align: center; margin-left: 0;
+    display: inline-flex; align-items: center; justify-content: center; height: 28px; box-sizing: border-box; }
+  #pickList .btn-add-sm, #pickList .pick-bk, #pickList .btn-del { line-height: 1; }
+  #pickList .btn-lock { display: inline-flex; align-items: center; justify-content: center; min-width: 66px; height: 28px; box-sizing: border-box; }
 </style>
 </head>
 <body>
 <header id="topbar">
   <div class="brand">
     <h1>🎓 研究生模拟选课系统</h1>
-    <div class="sub">中国科学院大学 · 2026 秋季学期 · 通用模拟器 · v0.0.2rc8</div>
+    <div class="sub">中国科学院大学 · 2026 秋季学期 · 通用模拟器 · v0.0.2rc9</div>
   </div>
   <div class="profile">
     <label>学生类别
@@ -370,7 +392,7 @@
           <label id="filterHomeOnlyWrap" title="仅当「属性」选中专业类课程（核心课/专业课/研讨课/实验课/实践课/科学前沿讲座）时可用：按画像一级学科代码（083/0857）筛选"><input type="checkbox" id="filterHomeOnly" checked> 仅本一级学科</label>
         </div>
         <span class="slot-filters">
-              <span class="fday">周次：<button class="day-chip" data-d="1">一</button><button class="day-chip" data-d="2">二</button><button class="day-chip" data-d="3">三</button><button class="day-chip" data-d="4">四</button><button class="day-chip" data-d="5">五</button><button class="day-chip" data-d="6">六</button><button class="day-chip" data-d="7">日</button></span>
+              <span class="fday">星期：<button class="day-chip" data-d="1">一</button><button class="day-chip" data-d="2">二</button><button class="day-chip" data-d="3">三</button><button class="day-chip" data-d="4">四</button><button class="day-chip" data-d="5">五</button><button class="day-chip" data-d="6">六</button><button class="day-chip" data-d="7">日</button></span>
               <span class="fper">节次：<button class="per-chip" data-p="1">1</button><button class="per-chip" data-p="2">2</button><button class="per-chip" data-p="3">3</button><button class="per-chip" data-p="4">4</button><button class="per-chip" data-p="5">5</button><button class="per-chip" data-p="6">6</button><button class="per-chip" data-p="7">7</button><button class="per-chip" data-p="8">8</button><button class="per-chip" data-p="9">9</button><button class="per-chip" data-p="10">10</button><button class="per-chip" data-p="11">11</button><button class="per-chip" data-p="12">12</button><button class="per-chip" data-p="13">13</button></span>
             </span>
 <div class="lib-list" id="libList"></div>
@@ -3758,6 +3780,7 @@ var COURSE_LINKS = (typeof window !== "undefined" && window.COURSE_LINKS) || {};
     filters: { q: "", dept: "", attr: "", level: "", disc: [], campus: "", sem: "", exam: [], days: [], periods: [], hideSel: false, merge: true, homeOnly: true },
     includeOtherDiscDegree: true,
     semLabels: {},
+    backup: {},
     tab: "sim",
     ttSem: "2026秋",          // 周课表当前学期
     ttWeek: "",              // 周次视图：""=全部周次 / "1".."20"
@@ -3920,22 +3943,29 @@ var SEL_KEY = "course_sim_selected_v1";
   
   function saveSelection() {
     try {
-      localStorage.setItem(SEL_KEY, JSON.stringify((state.selected || []).map(function (s) {
-        return { id: s.course.id, degree: !!s.degree };
-      })));
+      localStorage.setItem(SEL_KEY, JSON.stringify({
+        v: 2,
+        selected: (state.selected || []).map(function (s) { return { id: s.course.id, degree: !!s.degree }; }),
+        backup: Object.keys(state.backup || {})
+      }));
     } catch (e) { /* 无 localStorage 时忽略 */ }
   }
   function loadSelection() {
     try {
       var raw = localStorage.getItem(SEL_KEY);
       if (!raw) return [];
-      var list = JSON.parse(raw);
+      var parsed = JSON.parse(raw);
+      var list = parsed && parsed.v === 2 ? parsed.selected : (Array.isArray(parsed) ? parsed : []);
       if (!Array.isArray(list)) return [];
       var out = [];
       list.forEach(function (x) {
         var c = CORE.courseById(x && x.id);
         if (c) out.push({ course: c, degree: !!(x && x.degree) });
       });
+      if (parsed && parsed.v === 2 && Array.isArray(parsed.backup)) {
+        state.backup = {};
+        parsed.backup.forEach(function (g) { state.backup[g] = true; });
+      }
       return out;
     } catch (e) { return []; }
   }
@@ -3988,7 +4018,23 @@ var SEL_KEY = "course_sim_selected_v1";
     return false;
   }
   function degreeEditable(c) {
-    return c.cat === "core" || c.cat === "pro";
+    if (c.cat !== "core" && c.cat !== "pro") return false; // 仅核心课/专业课可标学位
+    // 学科代码（编码7~12位前四位）与本一级学科代码不符 → 置灰（不可作本学科学位课）
+    try {
+      var dc0 = String(c.code || "").slice(6, 12).slice(0, 4);
+      var pre = homeDiscPrefix();
+      if (dc0 && pre && dc0.indexOf(pre) !== 0) return false;
+    } catch (e) {}
+    return true;
+  }
+  function degreeLockReason(c) {
+    try {
+      var dc0 = String(c.code || "").slice(6, 12).slice(0, 4);
+      var pre = homeDiscPrefix();
+      if ((c.cat === "core" || c.cat === "pro") && dc0 && pre && dc0.indexOf(pre) !== 0)
+        return "学科代码 " + dc0 + " 与本一级学科 " + pre + " 不一致，不可作为本学科学位课";
+    } catch (e) {}
+    return "研讨/实验/实践/讲座 不作为学位课";
   }
 
   function selectedGids() {
@@ -4446,6 +4492,14 @@ function pickClass(gid, id) {
   }
 
   /* ---------------- 渲染：选课单 ---------------- */
+  function selectNodeIdx(c) {
+    // 选课时间节点：9/2 公共选修·直博公必；9/3 专业类；9/4 英语A/思政/学术道德
+    var n = c.name || "";
+    if (c.cat === "pubreq") return /中国马克思主义与当代|英语B|博士英语/.test(n) ? 1 : 3;
+    if (c.cat === "pubel") return 1;
+    if (["core", "pro", "seminar", "lab", "practice", "lecture"].indexOf(c.cat) >= 0) return 2;
+    return 1;
+  }
   function renderSelected() {
     var box = document.getElementById("selList");
     document.getElementById("selCount").textContent = "（" + state.selected.length + " 门）";
@@ -4453,7 +4507,7 @@ function pickClass(gid, id) {
     var hasSel = state.selected.length > 0;
     var actions = '<div class="sel-actions">'
       + '<button class="btn-copy-codes" title="一键复制全部课程代码（每行一个）"' + (hasSel ? "" : " disabled") + '>📋 复制课程代码</button>'
-      + '<button class="btn-export-txt" title="导出选课单（课程名称+课程代码）到 TXT"' + (hasSel ? "" : " disabled") + '>导出选课单(txt)</button>'
+      + '<button class="btn-export-txt" title="导出选课单（课程名称+课程代码）到 TXT"' + (hasSel ? "" : " disabled") + '>⬇ 导出选课单(txt)</button>'
       + '<button class="btn-import-sel" title="从导出的 txt 或课程代码清单导入选课单">⬆ 导入选课单(txt)</button>'
       + '<span class="sel-actions-hint">' + state.selected.length + " 门</span></div>";
 
@@ -4461,8 +4515,11 @@ function pickClass(gid, id) {
         ? '<div class="empty">选课单为空：从左侧课程库检索并点击「加入」即可。</div>'
         : '<div class="empty">选课单为空：从左侧课程库点击「加入」，或在「生物气溶胶推荐」页一键加载方案。</div>'); return; }
     var html = actions;
+    // 选课时间节点排序（自上而下）：9/2 公选·直博公必 → 9/3 专业类 → 9/4 英语A/思政/学术道德
     var order = { pubreq: 0, core: 1, pro: 2, support: 3, seminar: 4, lab: 5, practice: 6, lecture: 7, elect: 8 };
     var sorted = state.selected.slice().sort(function (a, b) {
+      var na = selectNodeIdx(a.course), nb = selectNodeIdx(b.course);
+      if (na !== nb) return na - nb;                                                    // 时间节点优先
       var oa = order[a.course.cat] != null ? order[a.course.cat] : 9, ob = order[b.course.cat] != null ? order[b.course.cat] : 9;
       return oa - ob;
     });
@@ -4470,10 +4527,12 @@ function pickClass(gid, id) {
       var c = s.course;
       var color = CAT_COLOR[c.cat] || "#999";
       var editable = degreeEditable(c);
-      html += '<div class="sel-row" data-id="' + c.id + '">'
+      var bkRow = !!(state.backup && state.backup[c.gid]);
+      html += '<div class="sel-row' + (bkRow ? " sel-backup" : "") + '" data-id="' + c.id + '">'
         + '<span class="sel-dot" style="background:' + color + '"></span>'
         + '<div class="sel-main">'
         + '<div class="sel-name" title="编码：' + esc(c.code || "-") + "｜教师：" + esc(c.teacher || c.prof || "-") + '">' + esc(c.name)
+        + (bkRow ? ' <span class="badge sel-bktag">备选</span>' : "")
         + (COURSE_LINKS[c.code] ? '<a class="cc-link" href="' + esc(COURSE_LINKS[c.code]) + '" target="_blank" rel="noopener" title="在选课系统查看课程详情">🔗</a>' : '')
         + '</div>'
         + '<div class="sel-sub">'
@@ -4486,7 +4545,7 @@ function pickClass(gid, id) {
         + (c.room ? " · " + esc(c.room) : "")
         + (c.teacher || c.prof ? " · 教师：" + esc(c.teacher || c.prof) : "") + '</div>'
         + "</div>"
-        + '<label class="deg-toggle' + (editable ? "" : " locked") + '"><input type="checkbox" data-id="' + c.id + '"' + (s.degree ? " checked" : "") + (editable ? "" : " disabled") + ">学位课</label>"
+        + '<label class="deg-toggle' + (editable ? "" : " locked") + '" title="' + (editable ? "标记为本一级学科学位课" : esc(degreeLockReason(c))) + '"><input type="checkbox" data-id="' + c.id + '"' + (s.degree ? " checked" : "") + (editable ? "" : " disabled") + ">学位课</label>"
         + '<button class="btn-code" data-code="' + esc(c.code || "") + '" title="复制本课课程代码">代码</button>'
         + '<button class="btn-del" data-id="' + c.id + '">✕</button>'
         + "</div>";
@@ -4586,8 +4645,9 @@ function pickClass(gid, id) {
 
   /* ---------------- 渲染：周课表 ---------------- */
   // 课程单元格 HTML（含退课按钮与完整信息 tooltip）
-  function courseCellHtml(c, sl) {
+  function courseCellHtml(c, sl, bk) {
     var color = CAT_COLOR[c.cat] || "#999";
+    var bkCls = bk ? " tt-bk" : "";
     var info = esc(c.name)
       + (c.code ? "（编码 " + esc(c.code) + "）" : "")
       + " " + esc(sl.time || "")
@@ -4597,9 +4657,9 @@ function pickClass(gid, id) {
       + " · 教师：" + esc(c.teacher || c.prof || "未公布")
       + " · 考试：" + esc(c.exam || "-")
       + (c.quota ? " · 限选" + c.quota + "人" : "");
-    return '<div class="tt-cell" style="border-color:' + color + '" title="' + info + '">'
+    return '<div class="tt-cell' + bkCls + '" style="border-color:' + color + '" title="' + info + '">'
       + '<button type="button" class="tt-del" data-gid="' + esc(c.gid) + '" title="取消选课（从选课单退课）">✕</button>'
-      + '<span class="tt-name" style="color:' + color + '">' + esc(c.name) + "</span>"
+      + '<span class="tt-name" style="color:' + color + '">' + esc(c.name) + (bk ? ' <span class="tt-bktag">备选</span>' : "") + "</span>"
       + (sl.room ? '<span class="tt-room">' + esc(sl.room) + "</span>" : "")
       + "</div>";
   }
@@ -4705,25 +4765,29 @@ function showTtWeekMenu(box) {
     }
 
     // 解析每门课在本学期内的（天 → 时段）
+    function isBk(s) { return !!(state.backup && state.backup[s.course.gid]); }
     var dayCourses = {};
     curSel.forEach(function (s) {
       var c = s.course;
       if (CORE.isMOOC(c)) return; // 慕课不占课表
+      var bk = isBk(s);
       (c.slots || []).forEach(function (sl) {
         if (!sl.day || !sl.periods || !sl.periods.length) return;
         if (state.ttWeek && !slotCoversWeek(sl, parseInt(state.ttWeek, 10))) return; // 按周过滤
         var ps = sl.periods.slice().sort(function (a, b) { return a - b; });
         if (!dayCourses[sl.day]) dayCourses[sl.day] = [];
-        dayCourses[sl.day].push({ course: c, slot: sl, periods: ps });
+        dayCourses[sl.day].push({ course: c, slot: sl, periods: ps, bk: bk });
       });
     });
 
     // 同日冲突检测
     function dayConflicted(list) {
-      // 周次感知：仅当同一格内的课程时段与开课周均重叠才算冲突
+      // 周次感知：仅当同一格内的课程时段与开课周均重叠才算冲突；备选课程不计入冲突
       for (var i = 0; i < list.length; i++)
-        for (var j = i + 1; j < list.length; j++)
+        for (var j = i + 1; j < list.length; j++) {
+          if (list[i].bk || list[j].bk) continue;
           if (CORE.slotConflict(list[i].slot, list[j].slot)) return true;
+        }
       return false;
     }
     // 每天的渲染布局：crosses=跨大课间的块（rowspan 连续）；perPeriod=逐节渲染；conflicted=冲突日逐节堆叠
@@ -4822,14 +4886,17 @@ function showTtWeekMenu(box) {
             if (items.length) {
               var cell = "";
               items.forEach(function (it2) {
-                cell += courseCellHtml(it2.course, it2.slot);
+                cell += courseCellHtml(it2.course, it2.slot, it2.bk);
               });
               // 空课时段：即使已有课程也整体变灰（规则面板会提示）
               var blkMode = dayBlocked[dd] && dayBlocked[dd][rr.p];
               var blkCls = blkMode ? " free-blocked" + (blkMode === "relaxed" ? " free-relaxed" : "") : "";
               // conflict-cell 仅当格内课程时段与周次均重叠（不同周次不标冲突）
               var cellConflict = items.some(function (itA, ia) {
-                return items.slice(ia + 1).some(function (itB) { return CORE.slotConflict(itA.slot, itB.slot); });
+                return items.slice(ia + 1).some(function (itB) {
+                  if (itA.bk || itB.bk) return false; // 备选不计冲突
+                  return CORE.slotConflict(itA.slot, itB.slot);
+                });
               });
               html += "<td class='tt-td" + (cellConflict ? " conflict-cell" : "") + blkCls
                 + "' data-d='" + dd + "' data-p='" + rr.p + "'>" + cell + "</td>";
@@ -4888,6 +4955,20 @@ function showTtWeekMenu(box) {
     // 事件委托：退课 ✕ / 切换学期 / 点击时间格弹面板
     box.onclick = async function (e) {
       var del = e.target.closest && e.target.closest(".tt-del");
+      if (del) {
+        var gid2 = del.getAttribute("data-gid");
+        if (gid2 && state.backup && state.backup[gid2]) { delete state.backup[gid2]; saveSelection(); }
+      }
+      var bkBtn = e.target.closest && e.target.closest(".tt-bkbtn");
+      if (bkBtn) {
+        var bg = bkBtn.getAttribute("data-gid");
+        if (bg) {
+          if (state.backup[bg]) delete state.backup[bg]; else state.backup[bg] = true;
+          saveSelection();
+          refresh();
+        }
+        return;
+      }
       if (del) {
         var gid = del.getAttribute("data-gid");
         var tdel = state.selected.filter(function (x) { return x.course.gid === gid; })[0];
@@ -5033,7 +5114,23 @@ function showTtWeekMenu(box) {
     try { if (q && q.focus) q.focus(); } catch (e) {}
   }
 
-function slotCandidatesAll(day, period, semester, selected, campus) {
+function conflictOnlyAtCell(c, day, period, selected) {
+    // c 与已选的冲突是否“只发生在当前格”：存在某个与 c 冲突的已选课程不占当前格 → 非唯一
+    try {
+      for (var i = 0; i < selected.length; i++) {
+        var sc = selected[i].course;
+        if (CORE.isMOOC(sc)) continue;
+        var inCell = (sc.slots || []).some(function (sl) { return sl.day === day && sl.periods.indexOf(period) >= 0; });
+        if (inCell) continue;
+        var conflictsOther = (sc.slots || []).some(function (sl) {
+          return (c.slots || []).some(function (cs) { return CORE.slotConflict(sl, cs); });
+        });
+        if (conflictsOther) return false;
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+  function slotCandidatesAll(day, period, semester, selected, campus) {
     // 与 coursesForSlot 同口径，但不过滤冲突（供面板把冲突课程置后置灰展示）
     var selGids = {};
     (selected || []).forEach(function (x) { selGids[x.course.gid] = true; });
@@ -5088,11 +5185,14 @@ function slotCandidatesAll(day, period, semester, selected, campus) {
       html += '<div class="pick-sec">本格已选课程（点击 ✕ 退课）</div>';
       occ.forEach(function (s) {
         var c = s.course, color = CAT_COLOR[c.cat] || "#999";
-        html += '<div class="pick-row" data-gid="' + esc(c.gid) + '">'
+        var bk = !!(state.backup && state.backup[c.gid]);
+        html += '<div class="pick-row' + (bk ? " pick-backup" : "") + '" data-gid="' + esc(c.gid) + '">'
           + '<span class="sel-dot" style="background:' + color + '"></span>'
           + '<div class="pick-info"><b>' + esc(c.name) + "</b> <span class='plan-credit'>" + fmt(c.credit) + "学分</span>"
+          + (bk ? '<span class="badge sel-bktag">备选</span>' : "")
           + (s.degree ? '<span class="badge reco" style="margin-left:6px">学位课</span>' : "")
           + '<div class="cc-meta">' + '<span class="badge b-dept">' + esc(c.dept) + "</span> " + esc(c.time) + (c.room ? " · " + esc(c.room) : "") + (c.teacher || c.prof ? " · 教师：" + esc(c.teacher || c.prof) : "") + "</div></div>"
+          + '<button class="pick-bk" data-gid="' + esc(c.gid) + '" title="' + (bk ? "取消备选（重新计入冲突）" : "标记为备选（不计入冲突）") + '">' + (bk ? "取消备选" : "＋ 备选") + "</button>"
           + '<button class="btn-del" data-gid="' + esc(c.gid) + '" title="退课">✕ 退课</button>'
           + "</div>";
       });
@@ -5121,6 +5221,9 @@ function slotCandidatesAll(day, period, semester, selected, campus) {
           + (c.quota ? " · 限选" + c.quota + "人" : "")
           + "</div></div>"
           + '<button class="btn-add-sm" data-id="' + c.id + '">＋ 加入</button>'
+          + (state.backup && state.backup[c.gid]
+              ? '<button class="pick-bk" data-gid="' + esc(c.gid) + '" title="取消备选">取消备选</button>'
+              : '<button class="pick-bk" data-gid="' + esc(c.gid) + '" title="标记为备选（不计入冲突）">＋ 备选</button>')
           + "</div>";
       });
     }
@@ -5137,11 +5240,26 @@ function slotCandidatesAll(day, period, semester, selected, campus) {
           + (c.campus ? " · " + (CAMPUS_NAME[c.campus] || c.campus) : "")
           + (c.room ? " · " + esc(c.room) : "")
           + (c.teacher || c.prof ? " · 教师：" + esc(c.teacher || c.prof) : "") + "</div></div>"
+          + (state.backup && state.backup[c.gid]
+              ? '<button class="pick-bk" data-gid="' + esc(c.gid) + '" title="取消备选">取消备选</button>'
+              : '<button class="pick-bk" data-gid="' + esc(c.gid) + '" title="冲突课程，标记为备选（不计入冲突）">＋ 备选</button>')
           + '<button class="btn-lock" disabled>✕ 冲突</button>'
           + "</div>";
       });
     }
     body.innerHTML = html;
+    // 备选按钮
+    body.querySelectorAll(".pick-bk").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var bg = b.getAttribute("data-gid");
+        if (bg) {
+          if (state.backup[bg]) delete state.backup[bg]; else state.backup[bg] = true;
+          saveSelection();
+          renderSlotPicker();
+          refresh();
+        }
+      });
+    });
     // 退课按钮
     body.querySelectorAll(".btn-del[data-gid]").forEach(function (b) {
       b.addEventListener("click", async function () {
@@ -5933,12 +6051,29 @@ function updateComboLabel(c) {
 
   /* ---------------- 课程代码复制 / TXT 导出 ---------------- */
   function selectedCodesText() {
-    return (state.selected || []).map(function (s) { return s.course.code || ""; }).filter(Boolean).join("\n");
+    var CAT_ORDER = { pubreq: 0, core: 1, pro: 2, support: 3, seminar: 4, lab: 5, practice: 6, lecture: 7, elect: 8 };
+    return (state.selected || []).slice()
+      .sort(function (a, b) {
+        var na = selectNodeIdx(a.course), nb = selectNodeIdx(b.course);
+        if (na !== nb) return na - nb;
+        var oa = CAT_ORDER[a.course.cat] != null ? CAT_ORDER[a.course.cat] : 9;
+        var ob = CAT_ORDER[b.course.cat] != null ? CAT_ORDER[b.course.cat] : 9;
+        return oa - ob;
+      })
+      .map(function (s) { return s.course.code || ""; }).filter(Boolean).join("\n");
   }
   function selectedTxt() {
     // 两列对齐：名称列按显示宽度（中文=2格）补齐空格后加 Tab，代码列在各行对齐
     var fw = function (x) { var w = 0; for (var i = 0; i < x.length; i++) w += x.charCodeAt(i) > 255 ? 2 : 1; return w; };
-    var items = (state.selected || []).map(function (s) { return { n: s.course.name || "-", c: s.course.code || "-" }; });
+    var items = (state.selected || []).slice()
+      .sort(function (a, b) {
+        var na = selectNodeIdx(a.course), nb = selectNodeIdx(b.course);
+        if (na !== nb) return na - nb;
+        var oa = { pubreq: 0, core: 1, pro: 2, support: 3, seminar: 4, lab: 5, practice: 6, lecture: 7, elect: 8 }[a.course.cat] != null ? { pubreq: 0, core: 1, pro: 2, support: 3, seminar: 4, lab: 5, practice: 6, lecture: 7, elect: 8 }[a.course.cat] : 9;
+        var ob = { pubreq: 0, core: 1, pro: 2, support: 3, seminar: 4, lab: 5, practice: 6, lecture: 7, elect: 8 }[b.course.cat] != null ? { pubreq: 0, core: 1, pro: 2, support: 3, seminar: 4, lab: 5, practice: 6, lecture: 7, elect: 8 }[b.course.cat] : 9;
+        return oa - ob;
+      })
+      .map(function (s) { return { n: s.course.name || "-", c: s.course.code || "-" }; });
     var maxW = fw("课程名称");
     items.forEach(function (it) { if (fw(it.n) > maxW) maxW = fw(it.n); });
     var pad = function (n) { var w = fw(n), sp = ""; while (w < maxW) { sp += " "; w++; } return n + sp; };
