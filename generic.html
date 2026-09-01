@@ -312,7 +312,7 @@
 <header id="topbar">
   <div class="brand">
     <h1>🎓 研究生模拟选课系统</h1>
-    <div class="sub">中国科学院大学 · 2026 秋季学期 · v0.0.3 · 课程库:20260901</div>
+    <div class="sub">中国科学院大学 · 2026 秋季学期 · v0.0.3rc1 课程库:20260901</div>
   </div>
   <div class="profile">
     <label>学生类别
@@ -530,12 +530,17 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
     var discPrefix = discCode.slice(0, 4);       // 一级学科分类码前四位
     var campus = "";
     try { var ch = sCode[sCode.length - 1]; if (sCode.length >= 18 && "HYZ".indexOf(ch) >= 0) campus = ch; } catch (e) {}
+    // 课程类型位（编码第14位）：1学科核心 2专业核心 3专业课 4研讨 5实验 6实践 7前沿 X公选 B公必
+    var TYPE_ATTRS = { "1": "学科核心课", "2": "专业核心课", "3": "专业课", "4": "研讨课", "5": "实验课", "6": "实践课", "7": "科学前沿讲座", "X": "公共选修课", "B": "公共必修课" };
+    var typeDigit = sCode[13] || "";
     return {
       code: sCode,
       valid: sCode.length > 0,
       discCode: discCode,
       discPrefix: discPrefix,
       discLabel: DISC_LABELS[discPrefix] || discPrefix,
+      typeDigit: typeDigit,                        // 编码第14位（类别位）
+      typeAttr: TYPE_ATTRS[typeDigit] || "",       // 类别位对应课程属性（attr 缺失时兜底）
       campus: campus
     };
   }
@@ -3875,6 +3880,7 @@ var COURSE_LINKS = (typeof window !== "undefined" && window.COURSE_LINKS) || {};
     profileType: "master",
     selected: [],            // [{course, degree}]
     filters: { q: "", dept: "", attr: "", level: "", disc: [], campus: "", sem: "", exam: [], days: [], periods: [], hideSel: false, merge: true, homeOnly: true },
+    homeOnlyMap: {}, // 「仅本一级学科」按类别（核心/专业/实验/研讨/实践等）记忆
     includeOtherDiscDegree: true,
     semLabels: {},
     backup: {},
@@ -3962,7 +3968,8 @@ var SEL_KEY = "course_sim_selected_v1";
         satisfactions: state.satisfactions || {},
         campus: state.campus || "",
         includeOtherDiscDegree: state.includeOtherDiscDegree,
-        semLabels: state.semLabels || {}
+        semLabels: state.semLabels || {},
+        homeOnlyMap: state.homeOnlyMap || {}
       }));
     } catch (e) {}
   }
@@ -4020,6 +4027,7 @@ var SEL_KEY = "course_sim_selected_v1";
         state.campus = o.campus || "";
         state.includeOtherDiscDegree = o.includeOtherDiscDegree !== false;
         state.semLabels = o.semLabels || {};
+        state.homeOnlyMap = o.homeOnlyMap || {};
       }
     } catch (e) {}
   }
@@ -4208,9 +4216,17 @@ var SEL_KEY = "course_sim_selected_v1";
         if (ib < 0) ib = 99;
         return ia - ib || (a < b ? -1 : (a > b ? 1 : 0));
       });
+      // 保留当前已选值（即使在其他约束下已无候选，避免选择被强制重置）
+      var cvA = state.filters.attr;
+      if (cvA && present.indexOf(cvA) < 0) present.push(cvA);
       return present;
     }
-    return Object.keys(vals).sort();
+    var arr = Object.keys(vals).sort();
+    var keyOf = FILTER_KEY[id];
+    var cv = keyOf ? state.filters[keyOf] : null;
+    var cvList = Array.isArray(cv) ? cv : (cv ? [cv] : []);
+    cvList.forEach(function (v) { if (v && arr.indexOf(v) < 0) arr.push(v); });
+    return arr;
   }
   function semOptColor() { return 1; }
 
@@ -4292,7 +4308,8 @@ var SEL_KEY = "course_sim_selected_v1";
   }
   function fuzzyQScore(q, c) {
     // 模糊匹配分：0=精确 1=前缀 2=包含 3=多词AND 4=前缀容错 5=窗口容错(编辑距离≤1) 9=不匹配
-    var hay = (((c.name || "") + " " + (c.en || "") + " " + (c.code || "") + " " + (c.teacher || "") + " " + (c.prof || "") + " " + (c.dept || "")).toLowerCase());
+    var hay = c._hay || (c._hay = (((c.name || "") + " " + (c.en || "") + " " + (c.code || "") + " " + (c.teacher || "") + " " + (c.prof || "") + " " + (c.dept || "")).toLowerCase()));
+    var set = c._qset || (c._qset = buildCharSet(hay));
     q = String(q || "").toLowerCase().trim();
     if (!q) return 0;
     if (hay === q) return 0;
@@ -4301,9 +4318,15 @@ var SEL_KEY = "course_sim_selected_v1";
     var terms = q.split(/[\s,，、/]+/).filter(Boolean);
     if (terms.length > 1 && terms.every(function (t) { return hay.indexOf(t) >= 0; })) return 3;
     if (q.length >= 3) {
+      // 缺字剪枝：正文里缺失的字符超过 1 个则不可能匹配(编辑距离≤1)，快速跳过（避免全窗口扫）
+      var missing = 0;
+      for (var mi = 0; mi < q.length; mi++) if (!set[q.charCodeAt(mi)]) { missing++; if (missing > 1) return 9; }
       if (levDist(hay.slice(0, q.length), q) <= 1) return 4;                 // 前缀容错（打错 1 个字）
       var best = 99;
+      var first = q.charCodeAt(0);
+      // 只在「首字符命中」的位置开窗，大幅减少 levDist 调用
       for (var i = 0; i + q.length <= hay.length; i++) {
+        if (hay.charCodeAt(i) !== first) continue;
         var d = levDist(hay.slice(i, i + q.length), q);
         if (d < best) best = d;
         if (best === 0) break;
@@ -4312,11 +4335,28 @@ var SEL_KEY = "course_sim_selected_v1";
     }
     return 9;
   }
+  function buildCharSet(hay) {
+    var s = {};
+    for (var i = 0; i < hay.length; i++) s[hay.charCodeAt(i)] = true;
+    return s;
+  }
   function courseDiscCode7(c) {
     // 课程编码 第7~12位 = 一级学科代码（如 083000 / 085701）
     return CORE.parseCourseCode(c.code).discCode;
   }
 
+  // 快速筛选（关键词/周次/节次/单选多选）→ 防抖渲染：避免每次敲键/点击都全量重建
+  var _libTimer = 0;
+  function scheduleLibRender() {
+    if (_libTimer) clearTimeout(_libTimer);
+    _libTimer = setTimeout(function () { renderFilters(); renderLibrary(); }, 150);
+  }
+  function flushLibRender() {
+    if (_libTimer) { clearTimeout(_libTimer); _libTimer = 0; }
+    try { renderFilters(); } catch (e) {}
+    try { renderLibrary(); } catch (e) {}
+  }
+  // 课程卡片时段文案缓存（同 gid / 同实例 复算代价高，命中后不再拼）
   function filteredGroups() {
     var f = state.filters;
     var sel = selectedGids();
@@ -4329,9 +4369,10 @@ var SEL_KEY = "course_sim_selected_v1";
       }
       if (f.dept && c.dept !== f.dept) return;
       if (f.attr) {
-        // 类别标签（如「核心课」）映射到真实属性；原始属性名原样匹配
+        // 类别匹配以“生效属性”为准：优先真实 attr，缺失时用编码第14位类别兜底（实践课=6 等）
+        var attrEff = c.attr || CORE.parseCourseCode(c.code).typeAttr;
         var allowed = ATTR_FILTER[f.attr];
-        if (allowed ? allowed.indexOf(c.attr) < 0 : c.attr !== f.attr) return;
+        if (allowed ? allowed.indexOf(attrEff) < 0 : attrEff !== f.attr) return;
       }
       if (f.level && c.level !== f.level) return;
       if (Array.isArray(f.disc) ? (f.disc.length && f.disc.indexOf(c.disc) < 0) : (f.disc && c.disc !== f.disc)) return;
@@ -4340,8 +4381,7 @@ var SEL_KEY = "course_sim_selected_v1";
       // 画像栏校区限定：隐藏跨校区课程（慕课除外）
       if (state.campus && c.campus && c.campus !== state.campus && !CORE.isMOOC(c)) return;
       if (f.sem && c.semester !== f.sem) return;
-      // 仅本一级学科：仅在「属性」选中专业类课程（核心/研讨/实验/实践/讲座等）时生效，
-      // 否则不起作用（属性=全部/公共课时等同未勾选，课程库显示全量）
+      // 仅本一级学科：专业类课程（核心/专业/研讨/实验/实践/前沿）一律按本一级学科过滤
       if (f.homeOnly && f.attr && PRO_ATTRS.indexOf(f.attr) >= 0
           && ["core", "pro", "seminar", "lab", "practice", "lecture"].indexOf(c.cat) >= 0) {
         var dcCode = courseDiscCode7(c);
@@ -4463,7 +4503,7 @@ var SEL_KEY = "course_sim_selected_v1";
       var classBadge = effInsts.length > 1 ? '<span class="badge multi">' + effInsts.length + "个班次</span>"
         : (g.gnum > 1 && effInsts.length === 1 ? '<span class="badge multi">1个班次</span>' : "");
       var semBadge = c.semester ? '<span class="badge sem">' + esc(semLabel(c.semester)) + "</span>" : "";
-      var timeStr = uniqueSlotStrs(g.instances);
+      var timeStr = slotStrsGroup(g);
       var fullInfo = "编码：" + (c.code || "-") + " ｜ 学分：" + fmt(c.credit) + " ｜ 英文：" + (c.en || "-") + " ｜ 节次：" + uniqueTimes(g.instances) + " ｜ 授课方式：" + (c.teach || "-") + " ｜ 考试方式：" + (c.exam || "-") + " ｜ 首席教授：" + (c.prof || "-") + " ｜ 主讲教师：" + (c.teacher || "-") + " ｜ 限选/已选：" + (c.quota || "-") + "/" + (c.taken || 0);
       html += '<div class="course-card' + (added ? " added" : "") + '" data-gid="' + esc(c.gid) + '">'
         + '<div class="cc-left">'
@@ -4489,7 +4529,7 @@ var SEL_KEY = "course_sim_selected_v1";
                     + '<option>无匹配班次（请调整周次/节次筛选）</option></select>';
                 }
                 return '<select class="class-sel" data-gid="' + esc(c.gid) + '">' + insts.map(function (inst, i) {
-                  var ctime = uniqueSlotStrs([inst]);
+                  var ctime = slotStrsInst(inst);
                   var camp = inst.campus ? (CAMPUS_NAME[inst.campus] || inst.campus) : "校区未标注";
                   var selOn = state.classPick[c.gid] === inst.id ? " selected" : "";
                   return '<option value="' + inst.id + '"' + selOn + '>班' + (i + 1) + "：" + esc(ctime) + " · " + esc(camp)
@@ -4522,6 +4562,14 @@ function pickClass(gid, id) {
     var s = {};
     instances.forEach(function (i) { s[i.time] = true; });
     return Object.keys(s).join("；");
+  }
+  function slotStrsGroup(g) {
+    if (g.rep._uts) return g.rep._uts;
+    return (g.rep._uts = uniqueSlotStrs(g.instances));
+  }
+  function slotStrsInst(c) {
+    if (c._utsI) return c._utsI;
+    return (c._utsI = uniqueSlotStrs([c]));
   }
   function uniqueSlotStrs(instances) {
     // 节次（开课周），覆盖多时段
@@ -4649,7 +4697,7 @@ function pickClass(gid, id) {
         + '<span class="badge b-cat">' + CAT_LABEL[c.cat] + "</span> "
         + '<span class="badge credit">' + fmt(c.credit) + "学分</span> "
         + (c.exam ? '<span class="badge b-exam">' + esc(c.exam) + "</span> " : "")
-        + esc(uniqueSlotStrs([c])) + " · " + '<span class="badge b-dept">' + esc(c.dept) + "</span>"
+        + esc(slotStrsInst(c)) + " · " + '<span class="badge b-dept">' + esc(c.dept) + "</span>"
         + (c.campus ? " · " + (CAMPUS_NAME[c.campus] || c.campus) : "")
         + (c.room ? " · " + esc(c.room) : "")
         + (c.teacher || c.prof ? " · 教师：" + esc(c.teacher || c.prof) : "") + '</div>'
@@ -5646,7 +5694,15 @@ function conflictOnlyAtCell(c, day, period, selected) {
       document.getElementById(id).addEventListener("change", function (e) {
         var map = { filterDept: "dept", filterLevel: "level", filterAttr: "attr", filterDisc: "disc", filterCampus: "campus", filterSem: "sem", filterExam: "exam" };
         state.filters[map[id]] = e.target.value;
-        renderFilters(); // 联动刷新选项
+        if (id === "filterAttr") {
+          // 仅本一级学科：按类别记忆恢复
+          var memKey = e.target.value || "*";
+          var mem = state.homeOnlyMap[memKey] != null ? state.homeOnlyMap[memKey] : true;
+          state.filters.homeOnly = mem;
+          var hoEl = document.getElementById("filterHomeOnly");
+          if (hoEl) hoEl.checked = mem;
+        }
+        renderFilters();
         renderLibrary();
       });
     });
@@ -5657,7 +5713,7 @@ function conflictOnlyAtCell(c, day, period, selected) {
         arr = arr.indexOf(d) >= 0 ? arr.filter(function (x) { return x !== d; }) : arr.concat([d]);
         state.filters.days = arr;
         b.classList.toggle("on", arr.indexOf(d) >= 0);
-        renderLibrary();
+        scheduleLibRender();
       });
     });
     document.querySelectorAll(".per-chip").forEach(function (b) {
@@ -5667,13 +5723,12 @@ function conflictOnlyAtCell(c, day, period, selected) {
         arr = arr.indexOf(pnum) >= 0 ? arr.filter(function (x) { return x !== pnum; }) : arr.concat([pnum]);
         state.filters.periods = arr;
         b.classList.toggle("on", arr.indexOf(pnum) >= 0);
-        renderLibrary();
+        scheduleLibRender();
       });
     });
     document.getElementById("filterQ").addEventListener("input", function (e) {
       state.filters.q = e.target.value.trim();
-      renderFilters(); // 关键词也联动收窄其它下拉取值
-      renderLibrary();
+      scheduleLibRender(); // 关键词也联动收窄其它下拉取值（防抖）
     });
     document.getElementById("filterHideSel").addEventListener("change", function (e) {
       state.filters.hideSel = e.target.checked;
@@ -5681,7 +5736,8 @@ function conflictOnlyAtCell(c, day, period, selected) {
     });
     document.getElementById("filterHomeOnly").addEventListener("change", function (e) {
       state.filters.homeOnly = e.target.checked;
-      renderFilters(); // 选项联动（一级学科变化影响学科/属性等取值）
+      state.homeOnlyMap[state.filters.attr || "*"] = e.target.checked; // 按当前类别记忆
+      renderFilters();
       renderLibrary();
     });
     document.getElementById("noConfirm").addEventListener("change", function (e) { state.noConfirm = e.target.checked; });
@@ -6392,6 +6448,10 @@ function isMobileDevice() {
     window.__APP_INTERNALS__ = {
       ttBindCount: function () { return ttBindCount; },
       combos: combos,
+      flushLibRender: flushLibRender,
+      getState: function () { return state; },
+      getFilters: function () { return state.filters; },
+      filteredGroups: filteredGroups,
       comboPick: comboPick,
       comboFilter: comboFilter,
       comboOpen: comboOpen,
