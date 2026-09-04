@@ -102,6 +102,7 @@
   .badge.credit { background: #eef2ff; color: #4338ca; }
   .badge.reco { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
   .badge.multi { background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; }
+  .badge.b-class { background: #fdf4ff; color: #86198f; border: 1px solid #f0abfc; } /* 班次序号（与课程库班次下拉同口径） */
   .badge.sem { background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
   .tt-tabs { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
   .tt-weekrow { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
@@ -313,7 +314,7 @@
 <header id="topbar">
   <div class="brand">
     <h1>🎓 研究生模拟选课系统</h1>
-    <div class="sub">中国科学院大学 · 2026 秋季学期 · v0.0.3rc4 课程库:20260904</div>
+    <div class="sub">中国科学院大学 · 2026 秋季学期 · v0.0.3rc5 课程库:20260904</div>
   </div>
   <div class="profile">
     <label>学生类别
@@ -352,7 +353,7 @@
         <option value="免修免考">免修免考</option>
       </select>
     </label>
-    <label id="incOtherLabel" style="white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;" title="勾选：所有核心课/专业课（含其他一级学科，如 0857/0713）标记为学位课的学分都计入「专业学位课学分」；取消勾选：仅计本一级学科学位课学分（规则校验同步变化）"><input type="checkbox" id="includeOtherDiscDegree" checked> 非一级学科专业学位课纳入学分</label>
+    <label id="incOtherLabel" style="white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;" title="勾选：所有核心课/专业课（含其他一级学科，如 0857/0713）标记为学位课的学分都计入「专业学位课学分」；取消勾选：仅计本一级学科学位课学分（规则校验同步变化）"><input type="checkbox" id="includeOtherDiscDegree"> 非一级学科专业学位课纳入学分</label>
   </div>
   <div class="chips" id="chips"></div>
   <div class="actions">
@@ -662,9 +663,9 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
         // 专业学位课 = 核心课/专业课 且标记为学位课；
         // 与本一级学科代码不符的课程不可作为本学科学位课：
         //   - 「学位·核心课/专业课」门数与学分统计（coreDegree/proDegree/degreeCoreCredit/degreeProCredit）只计本一级学科（inHome）；
-        //   - 「专业学位课」学分是否纳入其他学科由 opts.includeOtherDiscDegree 控制（默认纳入）
+        //   - 「专业学位课」学分是否纳入其他学科由 opts.includeOtherDiscDegree 控制（默认不纳入）
         var inHome = codeHome(c, opts.discSel, profileType);
-        var allowed = inHome || opts.includeOtherDiscDegree !== false; // 勾选“纳入”时跨学科也可作学位课
+        var allowed = inHome || opts.includeOtherDiscDegree === true; // 「非一级学科专业学位课纳入学分」勾选时才纳入跨学科
         if (allowed) {
           degreeCredit += cr;
           if (c.cat === "core") { coreDegree++; degreeCoreCredit += cr; }
@@ -831,7 +832,7 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
       level: degreeCredit >= prof.degreeCredit ? "pass" : "fail",
       title: "专业学位课学分 ≥" + prof.degreeCredit + "（本学年需满足）",
       detail: "当前 " + fmt(degreeCredit) + " 学分（本一级学科 " + (prof.discLabel || "083000 环境科学与工程") + " 相关核心课+专业课按学位课计"
-        + (opts.includeOtherDiscDegree === false ? "；未勾选「纳入其他一级学科专业学位课」，仅计本一级学科" : "；已勾选「纳入其他一级学科专业学位课」") + "）"
+        + (opts.includeOtherDiscDegree === true ? "；已勾选「纳入其他一级学科专业学位课」" : "；未勾选「纳入其他一级学科专业学位课」，仅计本一级学科") + "）"
     });
 
     // 5 公共选修
@@ -850,9 +851,9 @@ if (typeof window !== 'undefined') { window.COURSE_DATA = COURSE_DATA; window.SE
     selectedCourses.forEach(function (c) {
       if (PLAN_ELECT_CATS.indexOf(c.cat) < 0) return;
       if (!degreeMarked(c, selected)) { planProElect += c.credit || 0; return; }
-      // 跨学科课已标学位但「非一级学科专业学位课纳入学分」关闭 -> 不当学位课，回落到专业选修
+      // 跨学科课已标学位但「非一级学科专业学位课纳入学分」未勾选 -> 不当学位课，回落到专业选修
       var hIn = codeHome(c, opts.discSel, profileType);
-      if (!hIn && opts.includeOtherDiscDegree === false) planProElect += c.credit || 0;
+      if (!hIn && opts.includeOtherDiscDegree !== true) planProElect += c.credit || 0;
     });
     if (isEngPlan) {
       // 0857 资源与环境：课程学习≥24；学位课≥19（公共7+专业≥12）；公共必修非学位课(工程伦理)1；公选≥2；专业选修≥2；专业学位课内含核心课≥2门、专业课≥2门
@@ -3973,7 +3974,7 @@ var COURSE_LINKS = (typeof window !== "undefined" && window.COURSE_LINKS) || {};
     selected: [],            // [{course, degree}]
     filters: { q: "", dept: "", attr: "", level: "", disc: [], campus: "", sem: "", exam: [], days: [], periods: [], hideSel: false, merge: true, homeOnly: true },
     homeOnlyMap: {}, // 「仅本一级学科」按类别（核心/专业/实验/研讨/实践等）记忆
-    includeOtherDiscDegree: true,
+    includeOtherDiscDegree: false,
     semLabels: {},
     backup: {},
     tab: "sim",
@@ -4120,7 +4121,7 @@ var SEL_KEY = "course_sim_selected_v1";
       if (o && typeof o === "object") {
         state.satisfactions = o.satisfactions || {};
         state.campus = o.campus || "";
-        state.includeOtherDiscDegree = o.includeOtherDiscDegree !== false;
+        state.includeOtherDiscDegree = o.includeOtherDiscDegree === true; // 保存值缺失/非 true → 默认不纳入（不勾选）
         state.semLabels = o.semLabels || {};
         state.homeOnlyMap = o.homeOnlyMap || {};
       }
@@ -4136,7 +4137,7 @@ var SEL_KEY = "course_sim_selected_v1";
       var b = document.getElementById("profEngB");
       if (b) b.value = (state.satisfactions && state.satisfactions["博士英语"]) || "";
       var inc = document.getElementById("includeOtherDiscDegree");
-      if (inc) inc.checked = state.includeOtherDiscDegree !== false;
+      if (inc) inc.checked = !!state.includeOtherDiscDegree;
     } catch (e) {}
   }
 
@@ -4629,11 +4630,19 @@ var SEL_KEY = "course_sim_selected_v1";
                   return '<select class="class-sel" data-gid="' + esc(c.gid) + '" disabled>'
                     + '<option>无匹配班次（请调整周次/节次筛选）</option></select>';
                 }
+                // 班次选中基准：已加入 → 选课单中的实际班次（三面板联动）；否则记忆的 classPick
+                var curSelId = null;
+                if (added) {
+                  var s0 = state.selected.filter(function (s) { return s.course.gid === c.gid; })[0];
+                  if (s0) curSelId = s0.course.id;
+                }
+                if (curSelId == null) curSelId = state.classPick[c.gid];
                 return '<select class="class-sel" data-gid="' + esc(c.gid) + '">' + insts.map(function (inst, i) {
                   var ctime = slotStrsInst(inst);
                   var camp = inst.campus ? (CAMPUS_NAME[inst.campus] || inst.campus) : "校区未标注";
-                  var selOn = state.classPick[c.gid] === inst.id ? " selected" : "";
-                  return '<option value="' + inst.id + '"' + selOn + '>班' + (i + 1) + "：" + esc(ctime) + " · " + esc(camp)
+                  var selOn = curSelId === inst.id ? " selected" : "";
+                  // 班号用管线稳定序号 gix（不随周次/节次筛选重排），与选课单「班 gix」同口径
+                  return '<option value="' + inst.id + '"' + selOn + '>班' + (inst.gix || i + 1) + "：" + esc(ctime) + " · " + esc(camp)
                     + (inst.room ? " · " + esc(inst.room) : "")
                     + (inst.teacher || inst.prof ? " · 教师：" + esc(inst.teacher || inst.prof) : "") + "</option>";
                 }).join("") + '</select>';
@@ -4650,11 +4659,17 @@ function pickClass(gid, id) {
     state.classPick[gid] = id;
     var sel = selectedGids();
     if (sel[gid]) {
-      // 已加入时换班：移除旧班次并入新班次
+      // 已加入时换班：移除旧班次并入新班次，保留原「学位课」勾选
       var groups = filteredGroups();
       var g = groups.filter(function (x) { return x.rep.gid === gid; })[0];
       var inst = g && g.instances.filter(function (x) { return x.id === id; })[0];
-      if (inst) { removeByGid(gid); addCourse(inst); }
+      if (inst) {
+        var cur = state.selected.filter(function (x) { return x.course.gid === gid; })[0];
+        var degree = cur ? cur.degree : degreeDefault(inst);
+        state.selected = state.selected.filter(function (x) { return x.course.gid !== gid; });
+        state.selected.push({ course: inst, degree: degree });
+        refresh();
+      }
     }
     renderLibrary();
   }
@@ -4745,6 +4760,8 @@ function pickClass(gid, id) {
       showToast("已限定校区为" + ({ H: "雁栖湖", Y: "玉泉路", Z: "中关村" }[state.campus] || state.campus) + "，无法选择；如需跨校区请先改校区限定", "err");
       return;
     }
+    // 加入即记忆当前班次：课程库下拉/选课单/课表以同一班次为联动基准
+    state.classPick[course.gid] = course.id;
     state.selected.push({ course: course, degree: degreeDefault(course) });
     refresh();
   }
@@ -4794,6 +4811,7 @@ function pickClass(gid, id) {
         + (COURSE_LINKS[c.code] ? '<a class="cc-link" href="' + esc(LINK_BASE + COURSE_LINKS[c.code]) + '" target="_blank" rel="noopener" title="在选课系统查看课程详情">🔗</a>' : '')
         + '</div>'
         + '<div class="sel-sub">'
+        + (c.gnum > 1 ? '<span class="badge b-class" title="班次序号（与课程库班次下拉同口径）：' + esc(c.code) + '">班' + (c.gix || "?") + "/" + c.gnum + ' </span> ' : "")
         + (c.semester ? '<span class="badge sem">' + semLabel(c.semester) + "</span> " : "")
         + '<span class="badge b-cat">' + CAT_LABEL[c.cat] + "</span> "
         + '<span class="badge credit">' + fmt(c.credit) + "学分</span> "
@@ -4838,8 +4856,12 @@ function pickClass(gid, id) {
       var reader = new FileReader();
       reader.onload = function () {
         var r = importSelectionText(String(reader.result || ""));
-        showToast("导入选课单：" + r.added + " 门已加入（跳过 " + r.skipped + " 门已选、" + r.unknown + " 门未匹配）"
-          + (r.baseMatched ? "（其中 " + r.baseMatched + " 门按基础课程代码匹配班次）" : ""));
+        var msg = "导入选课单：" + r.added + " 门已加入";
+        if (r.replaced) msg += "（" + r.replaced + " 门换班）";
+        if (r.updated) msg += "（" + r.updated + " 门更新学位标记）";
+        msg += "（跳过 " + r.skipped + " 门已选、" + r.unknown + " 门未匹配）";
+        if (r.baseMatched) msg += "（其中 " + r.baseMatched + " 门按基础课程代码匹配班次）";
+        showToast(msg);
       };
       try { reader.readAsText(f, "utf-8"); } catch (err) {}
       e.target.value = "";
@@ -5618,6 +5640,7 @@ function conflictOnlyAtCell(c, day, period, selected) {
     items.forEach(function (it) {
       if (!state.selected.some(function (s) { return s.course.gid === it.course.gid; })) {
         state.selected.push({ course: it.course, degree: it.degree });
+        state.classPick[it.course.gid] = it.course.id; // 方案所选班次同步到课程库选中
       }
     });
     refresh();
@@ -6264,7 +6287,7 @@ function updateComboLabel(c) {
       .map(function (s) { return s.course.code || ""; }).filter(Boolean).join("\n");
   }
   function selectedTxt() {
-    // 两列对齐：名称列按显示宽度（中文=2格）补齐空格后加 Tab，代码列在各行对齐
+    // 三列导出：课程名称\t课程代码（含班次后缀）\t学位课标记；导入时精准匹配课程并还原「学位课」勾选
     var fw = function (x) { var w = 0; for (var i = 0; i < x.length; i++) w += x.charCodeAt(i) > 255 ? 2 : 1; return w; };
     var items = (state.selected || []).slice()
       .sort(function (a, b) {
@@ -6274,12 +6297,12 @@ function updateComboLabel(c) {
         var ob = { pubreq: 0, core: 1, pro: 2, support: 3, seminar: 4, lab: 5, practice: 6, lecture: 7, elect: 8 }[b.course.cat] != null ? { pubreq: 0, core: 1, pro: 2, support: 3, seminar: 4, lab: 5, practice: 6, lecture: 7, elect: 8 }[b.course.cat] : 9;
         return oa - ob;
       })
-      .map(function (s) { return { n: s.course.name || "-", c: s.course.code || "-" }; });
+      .map(function (s) { return { n: s.course.name || "-", c: s.course.code || "-", d: !!s.degree }; });
     var maxW = fw("课程名称");
     items.forEach(function (it) { if (fw(it.n) > maxW) maxW = fw(it.n); });
     var pad = function (n) { var w = fw(n), sp = ""; while (w < maxW) { sp += " "; w++; } return n + sp; };
-    var lines = [pad("课程名称") + "\t课程代码"];
-    items.forEach(function (it) { lines.push(pad(it.n) + "\t" + it.c); });
+    var lines = [pad("课程名称") + "\t课程代码\t学位"];
+    items.forEach(function (it) { lines.push(pad(it.n) + "\t" + it.c + "\t" + (it.d ? "学位" : "非学位")); });
     return lines.join("\n");
   }
 /* ---------------- 导入选课单(txt)：按课程代码/名称解析 ---------------- */
@@ -6309,6 +6332,12 @@ function updateComboLabel(c) {
         return xc === base || xc.indexOf(base + "-") === 0;
       });
       if (byBase.length) {
+        // 优先课程库当前选中的班次（classPick），保证与其它面板联动一致
+        var pickId = state.classPick[byBase[0].gid];
+        if (pickId) {
+          var picked = byBase.filter(function (x) { return x.id === pickId; });
+          if (picked.length) return { c: picked[0], base: true };
+        }
         if (name) {
           // 名称消歧到具体班次（同基础代码下仅比对“班次命名差异”）
           var nn = normCourseName(name);
@@ -6337,20 +6366,35 @@ function updateComboLabel(c) {
     return null;
   }
   function importSelectionText(text) {
-    // 兼容「导出选课单(txt)」格式（名称\t代码）与纯代码清单（每行一个编码）
-    var added = 0, skipped = 0, unknown = 0, baseMatched = 0;
-    var selGids = selectedGids();
+    // 兼容「导出选课单(txt)」三列格式（名称\t代码\t学位）与纯代码清单（每行一个编码）。
+    // 精准匹配：以完整课程代码（含班次后缀）为身份；同班次已选→跳过（保留勾选）、
+    // 同课程不同班次→精准换班（保留原「学位课」勾选）、txt 带学位标记→按标记还原勾选。
+    var added = 0, replaced = 0, updated = 0, skipped = 0, unknown = 0, baseMatched = 0;
     String(text || "").split(/\r?\n/).forEach(function (line) {
       line = String(line || "").replace(/^\uFEFF/, "").trim();
       if (!line) return;
       if (/^共 \d+ 门/.test(line) || line.indexOf("课程名称") === 0 || line.indexOf("选课单课程导出") === 0) return;
-      var name = "", code = "";
-      var sp = line.indexOf("\t");
-      if (sp >= 0) { name = line.slice(0, sp).trim(); code = line.slice(sp + 1).trim(); }
-      else {
-        // 纯代码/名称行（容忍行首空白/行尾逗号）；课程代码第 1 位必为数字，故首令牌以数字开头视为代码
-        // （代码后缀也可能含汉字，如 -P25级 / -1班，不能仅按字母数字判定）；
-        // 否则视为名称行（名称里也可能含短横，如「学术道德与学术写作规范-分论」）
+      // —— 行解析：Tab 优先拆字段；课程代码第 1 位必为数字，字段0/1 中数字开头者为完整代码 ——
+      var fields = line.split("\t").map(function (s) { return String(s).trim(); });
+      var name = "", code = "", degTxt = "";
+      if (fields.length >= 2 && /^\d/.test(fields[0] || "")) {
+        // 代码\t名称\t学位标记，或 代码\t学位标记（无名称列）
+        code = fields[0];
+        if (fields.length >= 3) {
+          name = fields[1] || "";
+          degTxt = fields[2] || "";
+        } else if (fields[1] === "学位" || fields[1] === "非学位") {
+          degTxt = fields[1];
+        } else {
+          name = fields[1] || "";
+        }
+      } else if (fields.length >= 2 && /^\d/.test(fields[1] || "")) {
+        // 名称\t代码\t[学位标记]
+        name = fields[0];
+        code = fields[1];
+        degTxt = fields[2] || "";
+      } else {
+        // 无 Tab（或首列非代码）：纯代码/名称行（容忍行首空白/行尾逗号）
         var parts = line.split(/[\s,，]+/);
         var t0 = (parts.shift() || "").trim();
         if (/^\d/.test(t0)) {
@@ -6365,13 +6409,32 @@ function updateComboLabel(c) {
       if (!hit) { unknown++; return; }
       var c = hit.c;
       if (hit.base) baseMatched++;
-      if (selGids[c.gid] || state.selected.some(function (x) { return x.course.gid === c.gid; })) { skipped++; return; }
-      state.selected.push({ course: c, degree: degreeDefault(c) });
-      selGids[c.gid] = true;
-      added++;
+      var degSpecified = degTxt === "学位" || degTxt === "非学位";
+      var sameInst = state.selected.filter(function (x) { return x.course.id === c.id; })[0];
+      if (sameInst) {
+        // 同班次已选：txt 标记与原勾选不同 → 按标记更新（记忆「学位课」勾选）；否则跳过
+        if (degSpecified && sameInst.degree !== (degTxt === "学位")) {
+          sameInst.degree = degTxt === "学位";
+          updated++;
+        } else {
+          skipped++;
+        }
+        return;
+      }
+      var curSame = state.selected.filter(function (x) { return x.course.gid === c.gid; });
+      var degree = degSpecified ? (degTxt === "学位")
+        : (curSame.length ? curSame[0].degree : degreeDefault(c)); // 换班保留原「学位课」勾选；无标记按默认
+      if (curSame.length) {
+        state.selected = state.selected.filter(function (x) { return x.course.gid !== c.gid; }); // 精准换班到 txt 班次
+        replaced++;
+      } else {
+        added++;
+      }
+      state.selected.push({ course: c, degree: degree });
+      state.classPick[c.gid] = c.id; // 导入所选班次同步到课程库选中（三面板班次一致）
     });
-    if (added) refresh();
-    return { added: added, skipped: skipped, unknown: unknown, baseMatched: baseMatched };
+    if (added || replaced) refresh();
+    return { added: added, replaced: replaced, updated: updated, skipped: skipped, unknown: unknown, baseMatched: baseMatched };
   }
 
     function copyTextToClipboard(text, tip) {
