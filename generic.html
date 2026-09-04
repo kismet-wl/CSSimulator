@@ -310,8 +310,6 @@
 </style>
 </head>
 <body>
-<script>setTimeout(function(){try{if(!window.__FILE_OK__){var d=document.createElement("div");d.textContent="⚠️ 文件可能不完整（未加载到结尾），请重新上传最新 deploy/index.html（约1.99MB）。";d.style.cssText="position:fixed;top:0;left:0;right:0;background:#b91c1c;color:#fff;padding:8px;z-index:99999;font-size:13px;text-align:center";document.body.appendChild(d);}}catch(e){}},1500);</script>
-
 <header id="topbar">
   <div class="brand">
     <h1>🎓 研究生模拟选课系统</h1>
@@ -4840,7 +4838,8 @@ function pickClass(gid, id) {
       var reader = new FileReader();
       reader.onload = function () {
         var r = importSelectionText(String(reader.result || ""));
-        showToast("导入选课单：" + r.added + " 门已加入（跳过 " + r.skipped + " 门已选、" + r.unknown + " 门未匹配）");
+        showToast("导入选课单：" + r.added + " 门已加入（跳过 " + r.skipped + " 门已选、" + r.unknown + " 门未匹配）"
+          + (r.baseMatched ? "（其中 " + r.baseMatched + " 门按基础课程代码匹配班次）" : ""));
       };
       try { reader.readAsText(f, "utf-8"); } catch (err) {}
       e.target.value = "";
@@ -6283,33 +6282,96 @@ function updateComboLabel(c) {
     items.forEach(function (it) { lines.push(pad(it.n) + "\t" + it.c); });
     return lines.join("\n");
   }
-function importSelectionText(text) {
+/* ---------------- 导入选课单(txt)：按课程代码/名称解析 ---------------- */
+  // 名称归一化（去空格/全角括号转半角），供名称匹配容错
+  function normCourseName(s) {
+    return String(s || "").replace(/\s+/g, "").replace(/[（(]/g, "(").replace(/[）)]/g, ")").trim();
+  }
+  // 名称前缀的剩余部分是否为「班次」标记（如 1班 / （A班）），避免过度前缀匹配（如「数学」误吞「数学物理方程」）
+  function isClassSuffix(rem) {
+    if (!rem) return true;
+    return /^(\([^)]*\)|第?\d+班|班|-\d+班|[-—]?\d*[A-Za-z]?\d*班)$/.test(String(rem || "").trim());
+  }
+  // 解析导入行 → 课程记录（找不到返回 null）。
+  // 匹配优先级：完整代码（含班次后缀——后缀也是代码的一部分）> 基础代码前缀（txt 代码是完整代码的基础部分）
+  //             > 名称精确 > 名称归一化（仅“纯班次差异”才前缀匹配）。
+  // 返回 {c: 课程, base: true/false}，base=true 表示按基础代码前缀命中（含班次消歧），用于提示。
+  function matchImportRow(code, name) {
+    if (code) {
+      code = String(code).trim().toUpperCase();
+      // 1) 完整代码精确命中（后缀也是代码的一部分）
+      var ex = CORE.DATA.filter(function (x) { return x.code === code; })[0];
+      if (ex) return { c: ex };
+      // 2) 基础代码前缀命中：txt 代码为数据中完整代码的基础部分（如 18...H 命中 18...H-01/-02）
+      var base = code.replace(/-[^-]*$/, "");
+      var byBase = CORE.DATA.filter(function (x) {
+        var xc = String(x.code || "");
+        return xc === base || xc.indexOf(base + "-") === 0;
+      });
+      if (byBase.length) {
+        if (name) {
+          // 名称消歧到具体班次（同基础代码下仅比对“班次命名差异”）
+          var nn = normCourseName(name);
+          var named = byBase.filter(function (x) {
+            var xn = normCourseName(x.name);
+            return xn === nn || (xn.indexOf(nn) === 0 && isClassSuffix(xn.slice(nn.length)));
+          });
+          if (named.length) return { c: named[0], base: true };
+        }
+        return { c: byBase[0], base: true }; // 无名称或无法区分班次：取首个班次（应用内可下拉换班）
+      }
+    }
+    if (name) {
+      // 3) 名称精确
+      var n1 = CORE.DATA.filter(function (x) { return x.name === name; })[0];
+      if (n1) return { c: n1 };
+      // 4) 名称归一化（空格/全角括号）；仅在数据名与输入名之间为“纯班次差异”时前缀匹配
+      var nn2 = normCourseName(name);
+      var n2 = CORE.DATA.filter(function (x) {
+        var xn = normCourseName(x.name);
+        if (xn === nn2) return true;
+        return xn.indexOf(nn2) === 0 && isClassSuffix(xn.slice(nn2.length));
+      })[0];
+      if (n2) return { c: n2 };
+    }
+    return null;
+  }
+  function importSelectionText(text) {
     // 兼容「导出选课单(txt)」格式（名称\t代码）与纯代码清单（每行一个编码）
-    var added = 0, skipped = 0, unknown = 0;
+    var added = 0, skipped = 0, unknown = 0, baseMatched = 0;
     var selGids = selectedGids();
     String(text || "").split(/\r?\n/).forEach(function (line) {
-      line = (line || "").trim();
+      line = String(line || "").replace(/^\uFEFF/, "").trim();
       if (!line) return;
       if (/^共 \d+ 门/.test(line) || line.indexOf("课程名称") === 0 || line.indexOf("选课单课程导出") === 0) return;
       var name = "", code = "";
       var sp = line.indexOf("\t");
       if (sp >= 0) { name = line.slice(0, sp).trim(); code = line.slice(sp + 1).trim(); }
-      else { code = line.split(/\s+/)[0].trim(); } // 纯代码行
-      var c = null;
-      if (code) {
-        c = CORE.DATA.filter(function (x) { return x.code === code; })[0];
+      else {
+        // 纯代码/名称行（容忍行首空白/行尾逗号）；课程代码第 1 位必为数字，故首令牌以数字开头视为代码
+        // （代码后缀也可能含汉字，如 -P25级 / -1班，不能仅按字母数字判定）；
+        // 否则视为名称行（名称里也可能含短横，如「学术道德与学术写作规范-分论」）
+        var parts = line.split(/[\s,，]+/);
+        var t0 = (parts.shift() || "").trim();
+        if (/^\d/.test(t0)) {
+          code = t0;
+          name = parts.join(" ").trim(); // 若带空格分隔的名称，一并取出用于班次消歧
+        } else {
+          name = line;
+        }
       }
-      if (!c && name) {
-        c = CORE.DATA.filter(function (x) { return x.name === name; })[0];
-      }
-      if (!c) { unknown++; return; }
+      var hit = matchImportRow(code, name);
+      if (!hit && code && !name) hit = matchImportRow("", line); // 数字开头的名称行兜底按名称再试
+      if (!hit) { unknown++; return; }
+      var c = hit.c;
+      if (hit.base) baseMatched++;
       if (selGids[c.gid] || state.selected.some(function (x) { return x.course.gid === c.gid; })) { skipped++; return; }
       state.selected.push({ course: c, degree: degreeDefault(c) });
       selGids[c.gid] = true;
       added++;
     });
     if (added) refresh();
-    return { added: added, skipped: skipped, unknown: unknown };
+    return { added: added, skipped: skipped, unknown: unknown, baseMatched: baseMatched };
   }
 
     function copyTextToClipboard(text, tip) {
@@ -6724,6 +6786,5 @@ function isMobileDevice() {
   })();
 })();
 </script>
-<script>window.__FILE_OK__=true;</script>
 </body>
 </html>
